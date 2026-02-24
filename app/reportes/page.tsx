@@ -3,67 +3,18 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
     BarChart3, TrendingUp, TrendingDown, DollarSign, Package, Award,
-    Calendar, Clock, Receipt, Filter, Eye, X
+    Calendar, Clock, Receipt, Eye, X
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-
-// --- BASE DE DATOS MOCK: HISTORIAL DE VENTAS CON PRODUCTOS ---
-// Hoy es 24 de Febrero de 2026 (Usaremos estas fechas para que el botón "Hoy" funcione)
-const HISTORIAL_VENTAS = [
-    {
-        id: 1, fecha: '2026-02-24', hora: '08:30', sucursal: 'Centro', metodo: 'Efectivo', productos: [
-            { nombre: 'Hojas Blancas Carta', cantidad: 2, precio: 85 }, { nombre: 'Lápiz HB Mirado 2', cantidad: 5, precio: 6 }
-        ]
-    },
-    {
-        id: 2, fecha: '2026-02-24', hora: '10:15', sucursal: 'Norte', metodo: 'Tarjeta', productos: [
-            { nombre: 'Cuaderno Profesional', cantidad: 3, precio: 35.5 }, { nombre: 'Pluma Punto Fino', cantidad: 10, precio: 8 }
-        ]
-    },
-    {
-        id: 3, fecha: '2026-02-24', hora: '12:45', sucursal: 'Centro', metodo: 'Efectivo', productos: [
-            { nombre: 'Calculadora Científica', cantidad: 1, precio: 250 }, { nombre: 'Goma de Migajón', cantidad: 2, precio: 4 }
-        ]
-    },
-    {
-        id: 4, fecha: '2026-02-24', hora: '16:20', sucursal: 'Sur', metodo: 'Transferencia', productos: [
-            { nombre: 'Carpeta Panorámica', cantidad: 5, precio: 45 }, { nombre: 'Cinta Adhesiva', cantidad: 2, precio: 15 }
-        ]
-    },
-    {
-        id: 5, fecha: '2026-02-23', hora: '09:10', sucursal: 'Centro', metodo: 'Efectivo', productos: [
-            { nombre: 'Marcatextos Amarillo', cantidad: 4, precio: 12 }, { nombre: 'Tijeras Punta Roma', cantidad: 1, precio: 22 }
-        ]
-    },
-    {
-        id: 6, fecha: '2026-02-23', hora: '14:00', sucursal: 'Norte', metodo: 'Tarjeta', productos: [
-            { nombre: 'Hojas Blancas Carta', cantidad: 5, precio: 85 }, { nombre: 'Pegamento en Barra', cantidad: 3, precio: 18 }
-        ]
-    },
-    {
-        id: 7, fecha: '2026-02-22', hora: '11:30', sucursal: 'Sur', metodo: 'Efectivo', productos: [
-            { nombre: 'Cuaderno Profesional', cantidad: 12, precio: 35.5 }, { nombre: 'Sacapuntas Metal', cantidad: 5, precio: 10 }
-        ]
-    },
-    {
-        id: 8, fecha: '2026-02-20', hora: '18:15', sucursal: 'Centro', metodo: 'Tarjeta', productos: [
-            { nombre: 'Lápiz HB Mirado 2', cantidad: 50, precio: 6 }, { nombre: 'Goma de Migajón', cantidad: 20, precio: 4 }
-        ]
-    },
-];
-
-
-
-const getFechaHoy = () => '2026-02-24';
+import { useApp } from '@/context/AppContext'; // 👈 1. Importamos Contexto Global
 
 export default function ReportesPage() {
+    const { ventas, sucursales } = useApp(); // 👈 2. Obtenemos las ventas reales de la aplicación
+
     const [sucursalFiltro, setSucursalFiltro] = useState('Todas');
-    const [fechaInicio, setFechaInicio] = useState('2026-02-01');
-    const [fechaFin, setFechaFin] = useState('2026-02-28');
-
-    // Modal de Detalles
+    const [fechaInicio, setFechaInicio] = useState(''); // Lo dejamos vacío para que lea el histórico por defecto
+    const [fechaFin, setFechaFin] = useState('');
     const [ticketSeleccionado, setTicketSeleccionado] = useState<any | null>(null);
-
     const [montado, setMontado] = useState(false);
 
     useEffect(() => {
@@ -71,12 +22,11 @@ export default function ReportesPage() {
     }, []);
 
     // =========================================================
-    // EL MOTOR ANALÍTICO: Todo se calcula a partir de las fechas
+    // EL MOTOR ANALÍTICO: Mucho más limpio gracias al tipado estricto
     // =========================================================
-
     const analisisDatos = useMemo(() => {
         // 1. Filtrar las ventas por sucursal y fechas
-        const ventasFiltradasBase = HISTORIAL_VENTAS.filter(venta => {
+        const ventasFiltradas = ventas.filter(venta => {
             const pasaSucursal = sucursalFiltro === 'Todas' || venta.sucursal === sucursalFiltro;
             const pasaFechaInicio = !fechaInicio || venta.fecha >= fechaInicio;
             const pasaFechaFin = !fechaFin || venta.fecha <= fechaFin;
@@ -90,37 +40,22 @@ export default function ReportesPage() {
 
         const esUnSoloDia = fechaInicio && fechaFin && fechaInicio === fechaFin;
 
-        // 2. Mapeamos para agregar las propiedades sin hacer enojar a TypeScript
-        const ventasFiltradas = ventasFiltradasBase.map(venta => {
-            let totalTicket = 0;
-            let articulosTicket = 0;
+        // 2. Extraer datos directamente de las ventas
+        ventasFiltradas.forEach(venta => {
+            totalIngresos += venta.total;
+            totalArticulos += venta.totalArticulos;
 
             const ejeX = esUnSoloDia ? venta.hora.substring(0, 2) + ':00' : venta.fecha;
+            if (!mapaGrafica[ejeX]) mapaGrafica[ejeX] = 0;
+            mapaGrafica[ejeX] += venta.total;
 
             venta.productos.forEach(prod => {
-                const subtotal = prod.cantidad * prod.precio;
-                totalTicket += subtotal;
-                articulosTicket += prod.cantidad;
-
                 if (!mapaProductos[prod.nombre]) {
                     mapaProductos[prod.nombre] = { nombre: prod.nombre, vendidas: 0, ingresos: 0 };
                 }
                 mapaProductos[prod.nombre].vendidas += prod.cantidad;
-                mapaProductos[prod.nombre].ingresos += subtotal;
+                mapaProductos[prod.nombre].ingresos += (prod.cantidad * prod.precio);
             });
-
-            totalIngresos += totalTicket;
-            totalArticulos += articulosTicket;
-
-            if (!mapaGrafica[ejeX]) mapaGrafica[ejeX] = 0;
-            mapaGrafica[ejeX] += totalTicket;
-
-            // Retornamos la venta original PLUS las nuevas propiedades
-            return {
-                ...venta,
-                total: totalTicket,
-                totalArticulos: articulosTicket
-            };
         });
 
         // 3. Ordenar para obtener el Top 10
@@ -135,16 +70,18 @@ export default function ReportesPage() {
         }));
 
         return { ventasFiltradas, totalIngresos, totalArticulos, masVendidos, menosVendidos, datosGrafica, esUnSoloDia };
-    }, [sucursalFiltro, fechaInicio, fechaFin]);
+    }, [ventas, sucursalFiltro, fechaInicio, fechaFin]); // Añadimos `ventas` a las dependencias
 
-    const { ventasFiltradas, totalIngresos, totalArticulos, masVendidos, menosVendidos, datosGrafica, esUnSoloDia } = analisisDatos;
+    const { ventasFiltradas, totalIngresos, totalArticulos, masVendidos, datosGrafica, esUnSoloDia } = analisisDatos;
 
-
-    // Botones Rápidos de Tiempo
     const aplicarFiltroRapido = (tipo: string) => {
-        const hoy = getFechaHoy();
+        const hoy = new Date().toISOString().split('T')[0]; // Toma la fecha real del sistema
         if (tipo === 'hoy') { setFechaInicio(hoy); setFechaFin(hoy); }
-        if (tipo === 'mes') { setFechaInicio('2026-02-01'); setFechaFin('2026-02-28'); }
+        if (tipo === 'mes') {
+            const yyyyMm = hoy.substring(0, 7);
+            setFechaInicio(`${yyyyMm}-01`);
+            setFechaFin(`${yyyyMm}-31`);
+        }
         if (tipo === 'todos') { setFechaInicio(''); setFechaFin(''); }
     };
 
@@ -160,46 +97,46 @@ export default function ReportesPage() {
         return null;
     };
 
+    if (!montado) return <div className="p-6">Cargando...</div>;
+
     return (
         <div className="p-4 md:p-6 bg-slate-50 min-h-full flex flex-col gap-6">
 
-            {/* 1. HEADER Y FILTROS GLOBALES (Estos controlan TODO) */}
+            {/* HEADER Y FILTROS GLOBALES */}
             <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                 <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
                     <BarChart3 className="text-blue-600 w-6 h-6" /> Reporte General
                 </h1>
 
                 <div className="flex flex-col md:flex-row items-end md:items-center gap-4 w-full xl:w-auto">
-
-                    {/* Botones Rápidos */}
                     <div className="flex bg-slate-100 p-1 rounded-lg">
                         <button onClick={() => aplicarFiltroRapido('hoy')} className="px-3 py-1.5 text-sm font-semibold rounded-md text-slate-600 hover:bg-white shadow-sm">Hoy</button>
                         <button onClick={() => aplicarFiltroRapido('mes')} className="px-3 py-1.5 text-sm font-semibold rounded-md text-slate-600 hover:bg-white shadow-sm">Este Mes</button>
                         <button onClick={() => aplicarFiltroRapido('todos')} className="px-3 py-1.5 text-sm font-semibold rounded-md text-slate-600 hover:bg-white shadow-sm">Histórico</button>
                     </div>
 
-                    {/* Filtros de Fecha */}
                     <div className="flex items-center gap-2">
                         <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" />
                         <span className="text-slate-400 font-bold">-</span>
                         <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" />
                     </div>
 
-                    {/* Selector de Sucursal */}
                     <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
                         <Calendar className="w-4 h-4 text-slate-500 ml-2" />
                         <select value={sucursalFiltro} onChange={(e) => setSucursalFiltro(e.target.value)} className="w-36 p-1 text-sm font-bold text-blue-700 bg-transparent border-none focus:outline-none cursor-pointer">
                             <option value="Todas">🏢 Todas las Suc.</option>
-                            <option value="Centro">📍 Centro</option>
-                            <option value="Norte">📍 Norte</option>
-                            <option value="Sur">📍 Sur</option>
+                            {/* 👈 Dibujamos las sucursales dinámicamente desde el Contexto */}
+                            {sucursales.map(sucursal => (
+                                <option key={sucursal.id} value={sucursal.nombre}>
+                                    📍 {sucursal.nombre}
+                                </option>
+                            ))}
                         </select>
                     </div>
-
                 </div>
             </div>
 
-            {/* 2. TARJETAS DE KPIs (Sincronizadas con la fecha) */}
+            {/* TARJETAS DE KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center gap-4 border-l-4 border-l-green-500">
                     <div className="bg-green-100 p-3 rounded-xl"><DollarSign className="text-green-600 w-6 h-6" /></div>
@@ -228,10 +165,8 @@ export default function ReportesPage() {
                 </div>
             </div>
 
-            {/* 3. GRÁFICAS Y TOP 10 */}
+            {/* GRÁFICAS Y TOP 10 */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-                {/* GRÁFICA */}
                 <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 lg:col-span-2 flex flex-col">
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -244,7 +179,10 @@ export default function ReportesPage() {
 
                     <div className="flex-1 min-h-[300px] w-full">
                         {datosGrafica.length === 0 ? (
-                            <div className="h-full flex items-center justify-center text-slate-400 font-medium">No hay ventas en este periodo.</div>
+                            <div className="h-full flex flex-col items-center justify-center text-slate-400 font-medium">
+                                <BarChart3 className="w-12 h-12 mb-2 text-slate-300" />
+                                No hay ventas en este periodo.
+                            </div>
                         ) : (
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={datosGrafica} margin={{ top: 5, right: 10, bottom: 5, left: -20 }}>
@@ -259,7 +197,6 @@ export default function ReportesPage() {
                     </div>
                 </div>
 
-                {/* TOP 10 MÁS VENDIDOS */}
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col max-h-[400px]">
                     <div className="p-4 border-b border-slate-100">
                         <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wider">
@@ -289,7 +226,7 @@ export default function ReportesPage() {
                 </div>
             </div>
 
-            {/* 4. TABLA DE HISTORIAL DE VENTAS (Sin columna ID ni Buscador) */}
+            {/* TABLA DE HISTORIAL DE VENTAS */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col mt-2">
                 <div className="p-5 border-b border-slate-200">
                     <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -302,7 +239,7 @@ export default function ReportesPage() {
                     <table className="w-full text-left border-collapse whitespace-nowrap">
                         <thead>
                             <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
-                                <th className="py-3 px-6 font-semibold">Fecha y Hora</th>
+                                <th className="py-3 px-6 font-semibold">Ticket / Fecha</th>
                                 <th className="py-3 px-6 font-semibold">Sucursal</th>
                                 <th className="py-3 px-6 font-semibold text-center">Cant. Artículos</th>
                                 <th className="py-3 px-6 font-semibold text-center">Método Pago</th>
@@ -321,8 +258,8 @@ export default function ReportesPage() {
                                 ventasFiltradas.map((venta) => (
                                     <tr key={venta.id} className="hover:bg-blue-50/30 transition-colors">
                                         <td className="py-3 px-6">
-                                            <div className="font-medium text-slate-700">{venta.fecha}</div>
-                                            <div className="text-xs text-slate-400">{venta.hora}</div>
+                                            <div className="font-bold text-blue-600">{venta.id}</div>
+                                            <div className="text-xs text-slate-500 font-medium">{venta.fecha} • {venta.hora}</div>
                                         </td>
                                         <td className="py-3 px-6">
                                             <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-semibold border border-slate-200">
@@ -340,7 +277,7 @@ export default function ReportesPage() {
                                             </span>
                                         </td>
                                         <td className="py-3 px-6 text-right font-bold text-slate-800">
-                                            ${venta.total?.toFixed(2)}
+                                            ${venta.total.toFixed(2)}
                                         </td>
                                         <td className="py-3 px-6 text-center">
                                             <button
@@ -358,17 +295,13 @@ export default function ReportesPage() {
                 </div>
             </div>
 
-            {/* =========================================================================
-          MODAL DE DETALLES DEL TICKET (NUEVO)
-          ========================================================================= */}
+            {/* MODAL DE DETALLES DEL TICKET */}
             {ticketSeleccionado && (
                 <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-
-                        {/* Header del Ticket */}
                         <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 text-center relative">
                             <div className="w-full">
-                                <h2 className="text-lg font-bold text-slate-800">TICKET DE VENTA</h2>
+                                <h2 className="text-lg font-bold text-slate-800">TICKET {ticketSeleccionado.id}</h2>
                                 <p className="text-xs text-slate-500 mt-1">{ticketSeleccionado.fecha} a las {ticketSeleccionado.hora} • Sucursal {ticketSeleccionado.sucursal}</p>
                             </div>
                             <button onClick={() => setTicketSeleccionado(null)} className="absolute right-4 top-4 text-slate-400 hover:text-red-500 transition-colors">
@@ -376,7 +309,6 @@ export default function ReportesPage() {
                             </button>
                         </div>
 
-                        {/* Lista de Productos Vendidos */}
                         <div className="p-6 overflow-y-auto flex-1">
                             <div className="space-y-4">
                                 {ticketSeleccionado.productos.map((prod: any, i: number) => (
@@ -391,7 +323,6 @@ export default function ReportesPage() {
                             </div>
                         </div>
 
-                        {/* Resumen Final del Modal */}
                         <div className="p-6 bg-slate-50 border-t border-slate-200">
                             <div className="flex justify-between text-sm text-slate-600 mb-2">
                                 <span>Método de Pago:</span>
@@ -401,18 +332,13 @@ export default function ReportesPage() {
                                 <span className="text-slate-500 font-medium">Total Cobrado:</span>
                                 <span className="text-3xl font-black text-blue-600">${ticketSeleccionado.total.toFixed(2)}</span>
                             </div>
-                            <button
-                                onClick={() => setTicketSeleccionado(null)}
-                                className="w-full mt-6 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold transition-colors"
-                            >
+                            <button onClick={() => setTicketSeleccionado(null)} className="w-full mt-6 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold transition-colors">
                                 Cerrar Detalles
                             </button>
                         </div>
-
                     </div>
                 </div>
             )}
-
         </div>
     );
 }
