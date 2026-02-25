@@ -3,42 +3,43 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Store, KeyRound, User, ArrowRight, ShieldAlert } from 'lucide-react';
-import { useApp } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
+import { signIn } from 'next-auth/react'; // 👈 Importamos la función de autenticación real
 
 export default function LoginPage() {
   const router = useRouter();
-  const { sucursales } = useApp(); // Traemos las sucursales para validar
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
 
-  const iniciarSesion = (e: React.FormEvent) => {
+  // 👈 Esta función ahora se conecta al servidor
+  const iniciarSesion = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setCargando(true);
 
-    // Simulamos un pequeño retraso de red para que se vea natural
-    setTimeout(() => {
-      // 1. Buscamos si existe la sucursal con esas credenciales
-      const sucursalEncontrada = sucursales.find(
-        (suc) => suc.username === username && suc.password === password
-      );
+    try {
+      // Llamamos al proveedor 'credentials' que configuramos en NextAuth
+      const resultado = await signIn('credentials', {
+        username: username,
+        password: password,
+        redirect: false, // Evitamos que NextAuth recargue la página automáticamente si hay error
+      });
 
-      // 2. También dejamos una puerta trasera "admin" para el dueño
-      const esAdmin = username === 'admin' && password === 'admin123';
-
-      if (sucursalEncontrada || esAdmin) {
-        // Credenciales correctas -> Lo mandamos al Punto de Venta
-        router.push('/ventas');
-      } else {
-        // Credenciales incorrectas
+      if (resultado?.error) {
+        // Si las credenciales están mal, NextAuth devuelve un error
         setError('Usuario o contraseña incorrectos. Intenta de nuevo.');
         setCargando(false);
+      } else if (resultado?.ok) {
+        // Si está bien, el JWT ya se guardó en la cookie. Lo mandamos a ventas.
+        router.push('/ventas');
       }
-    }, 800);
+    } catch (err) {
+      setError('Ocurrió un error al conectar con el servidor.');
+      setCargando(false);
+    }
   };
 
   return (
@@ -80,7 +81,7 @@ export default function LoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl py-3 pl-11 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
-                placeholder="ej. caja_centro"
+                placeholder="Sucursal"
               />
             </div>
           </div>
@@ -110,13 +111,6 @@ export default function LoginPage() {
             )}
           </Button>
         </form>
-
-        {/* Ayuda visual en modo desarrollo */}
-        <div className="mt-8 p-4 bg-slate-50 border border-slate-100 rounded-xl text-xs text-slate-500 flex flex-col gap-1">
-          <p className="font-bold text-slate-700 mb-1">Cuentas de prueba:</p>
-          <p>• Admin: <span className="font-mono text-blue-600 font-bold">admin / admin123</span></p>
-          <p>• Sucursal: <span className="font-mono text-blue-600 font-bold">caja_centro / 123</span></p>
-        </div>
 
       </div>
     </div>

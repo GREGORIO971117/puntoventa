@@ -19,7 +19,6 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={`${inter.className} h-screen flex flex-col overflow-hidden`}>
-        {/* 👈 NUEVO: Envolvemos la app con AuthProvider */}
         <AuthProvider>
           <AppProvider>
             <Navbar />
