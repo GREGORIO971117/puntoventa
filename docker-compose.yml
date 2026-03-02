@@ -19,7 +19,7 @@ services:
     container_name: paperpos-web
     restart: always
     ports:
-      - "3000:3000"
+      - "3005:3000"
     environment:
       # 👈 Fíjate cómo la URL ya no dice "localhost", sino "db" (el nombre del contenedor de arriba)
       - DATABASE_URL=postgresql://admin:adminpassword@db:5432/paperpos?schema=public
