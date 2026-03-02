@@ -1,37 +1,45 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     Package, AlertTriangle, XCircle, CheckCircle2, Plus, Search,
     MoreVertical, Edit, Trash2, ArrowUpCircle, X,
-    ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight
+    ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Upload, Download
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-// 👈 1. Importamos las acciones reales del servidor
-import { obtenerInventario, obtenerSucursales, crearProductoBD, surtirProductoBD, eliminarProductoBD } from '@/app/actions';
+import { read, utils, writeFile } from 'xlsx'; // 👈 1. Añadimos writeFile para descargar
+import {
+    obtenerInventario, obtenerSucursales, crearProductoBD,
+    surtirProductoBD, eliminarProductoBD, editarProductoBD,
+    importarInventarioMasivoBD, eliminarTodoInventarioBD
+} from '@/app/actions';
 
 export default function InventarioPage() {
-    // 👈 2. Estados locales para la BD
     const [inventario, setInventario] = useState<any[]>([]);
     const [sucursales, setSucursales] = useState<any[]>([]);
     const [cargando, setCargando] = useState(true);
     const [guardando, setGuardando] = useState(false);
+    const [importando, setImportando] = useState(false);
 
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // 👈 2. Nuevos estados para los filtros
     const [sucursalFiltro, setSucursalFiltro] = useState<string | 'Todas'>('Todas');
+    const [estatusFiltro, setEstatusFiltro] = useState<string | 'Todos'>('Todos');
     const [busqueda, setBusqueda] = useState('');
-    const [menuAbiertoId, setMenuAbiertoId] = useState<string | null>(null); // Los IDs de Prisma son strings
+    const [menuAbiertoId, setMenuAbiertoId] = useState<string | null>(null);
 
     const [ordenConfig, setOrdenConfig] = useState<{ clave: string, direccion: 'asc' | 'desc' } | null>(null);
-    const [filasPorPagina, setFilasPorPagina] = useState(5);
+    const [filasPorPagina, setFilasPorPagina] = useState(10);
     const [paginaActual, setPaginaActual] = useState(1);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [idEditando, setIdEditando] = useState<string | null>(null);
 
     const [nuevoProducto, setNuevoProducto] = useState({
         nombre: '', categoria: 'Papelería', precio: '', stock: '', stockMinimo: '', sucursal: ''
     });
 
-    // 👈 3. Efecto para cargar datos reales al montar la página
     const cargarDatos = async () => {
         setCargando(true);
         const [datosInventario, datosSucursales] = await Promise.all([
@@ -39,13 +47,11 @@ export default function InventarioPage() {
             obtenerSucursales()
         ]);
 
-        // Filtramos para quitar al admin de la lista de sucursales
         const sucursalesFisicas = datosSucursales.filter((s: any) => s.rol !== 'admin');
-
         setInventario(datosInventario);
         setSucursales(sucursalesFisicas);
 
-        if (sucursalesFisicas.length > 0) {
+        if (sucursalesFisicas.length > 0 && !idEditando) {
             setNuevoProducto(prev => ({ ...prev, sucursal: sucursalesFisicas[0].nombre }));
         }
         setCargando(false);
@@ -55,10 +61,90 @@ export default function InventarioPage() {
         cargarDatos();
     }, []);
 
+    // --- LÓGICA DE EXCEL (Importar y Exportar) ---
+    const manejarSubidaExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setImportando(true);
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = read(data);
+            const hojaNombre = workbook.SheetNames[0];
+            const hoja = workbook.Sheets[hojaNombre];
+            const productosExcel = utils.sheet_to_json(hoja);
+
+            if (productosExcel.length === 0) {
+                alert("El archivo Excel está vacío.");
+                setImportando(false);
+                return;
+            }
+
+            const resultado = await importarInventarioMasivoBD(productosExcel);
+
+            if (resultado.success) {
+                alert(`✅ Se importaron ${resultado.count} productos exitosamente.`);
+                await cargarDatos();
+            } else {
+                alert(resultado.error);
+            }
+        } catch (error) {
+            alert("Error al leer el archivo. Asegúrate de que sea válido.");
+            console.error(error);
+        } finally {
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            setImportando(false);
+        }
+    };
+
+    // 👈 3. Función para DESCARGAR Excel
+    const descargarExcel = () => {
+        if (datosProcesados.length === 0) {
+            alert("No hay datos para exportar con los filtros actuales.");
+            return;
+        }
+
+        // Preparamos los datos con nombres de columnas amigables
+        const datosAExportar = datosProcesados.map(item => {
+            let estado = 'Óptimo';
+            if (item.stock === 0) estado = 'Agotado';
+            else if (item.stock <= item.stockMinimo) estado = 'Bajo Stock';
+
+            return {
+                'ID': item.id,
+                'Nombre del Producto': item.nombre,
+                'Categoría': item.categoria,
+                'Sucursal': item.sucursal,
+                'Precio ($)': Number(item.precio),
+                'Stock Actual': Number(item.stock),
+                'Stock Mínimo': Number(item.stockMinimo),
+                'Estado': estado
+            };
+        });
+
+        // Convertimos a hoja de cálculo y generamos el archivo
+        const hoja = utils.json_to_sheet(datosAExportar);
+        const libro = utils.book_new();
+        utils.book_append_sheet(libro, hoja, "Inventario Filtrado");
+
+        // El nombre del archivo incluye la fecha actual
+        const nombreArchivo = `Inventario_${new Date().toISOString().split('T')[0]}.xlsx`;
+        writeFile(libro, nombreArchivo);
+    };
+
+    // --- Lógica de filtrado de la tabla ---
     let datosProcesados = inventario.filter((item) => {
         const coincideSucursal = sucursalFiltro === 'Todas' || item.sucursal === sucursalFiltro;
         const coincideBusqueda = item.nombre.toLowerCase().includes(busqueda.toLowerCase());
-        return coincideSucursal && coincideBusqueda;
+
+        // 👈 4. Filtro por Estatus
+        let estadoItem = 'Óptimo';
+        if (item.stock === 0) estadoItem = 'Agotado';
+        else if (item.stock <= item.stockMinimo) estadoItem = 'Bajo Stock';
+
+        const coincideEstatus = estatusFiltro === 'Todos' || estadoItem === estatusFiltro;
+
+        return coincideSucursal && coincideBusqueda && coincideEstatus;
     });
 
     if (ordenConfig !== null) {
@@ -83,12 +169,25 @@ export default function InventarioPage() {
 
     const IconoOrden = ({ columna }: { columna: string }) => {
         if (ordenConfig?.clave !== columna) return <ArrowUpDown className="w-3 h-3 text-slate-300 inline ml-1" />;
-        return ordenConfig.direccion === 'asc'
-            ? <ChevronUp className="w-3 h-3 text-blue-600 inline ml-1" />
-            : <ChevronDown className="w-3 h-3 text-blue-600 inline ml-1" />;
+        return ordenConfig.direccion === 'asc' ? <ChevronUp className="w-3 h-3 text-blue-600 inline ml-1" /> : <ChevronDown className="w-3 h-3 text-blue-600 inline ml-1" />;
     };
 
-    // 👈 4. Función conectada a BD para Surtir
+    const vaciarInventario = async () => {
+        const confirmar1 = window.confirm("⚠️ ADVERTENCIA: ¿Estás a punto de ELIMINAR TODOS los productos del inventario. ¿Deseas continuar?");
+        if (confirmar1) {
+            const confirmar2 = window.confirm("🛑 ÚLTIMO AVISO: Esta acción es IRREVERSIBLE y borrará todo el catálogo. ¿Estás absolutamente seguro?");
+            if (confirmar2) {
+                setGuardando(true);
+                const resultado = await eliminarTodoInventarioBD();
+                if (resultado.success) {
+                    await cargarDatos();
+                    alert("🗑️ El inventario ha sido vaciado por completo.");
+                } else alert(resultado.error);
+                setGuardando(false);
+            }
+        }
+    };
+
     const surtirProducto = async (id: string, sucursal: string) => {
         const cantidad = window.prompt(`¿Cuántas piezas vas a ingresar al inventario de ${sucursal}?`, '10');
         if (cantidad && !isNaN(Number(cantidad))) {
@@ -96,48 +195,50 @@ export default function InventarioPage() {
             if (numCantidad > 0) {
                 setMenuAbiertoId(null);
                 const resultado = await surtirProductoBD(id, numCantidad);
-                if (resultado.success) {
-                    await cargarDatos(); // Recargamos para ver el nuevo stock
-                } else {
-                    alert(resultado.error);
-                }
+                if (resultado.success) await cargarDatos();
+                else alert(resultado.error);
             }
-        } else {
-            setMenuAbiertoId(null);
-        }
+        } else setMenuAbiertoId(null);
     };
 
-    // 👈 5. Función conectada a BD para Eliminar
     const eliminarProducto = async (id: string) => {
-        const confirmar = window.confirm("¿Estás seguro de que deseas eliminar este producto permanentemente de la Base de Datos?");
+        const confirmar = window.confirm("¿Estás seguro de que deseas eliminar este producto permanentemente?");
         if (confirmar) {
             setMenuAbiertoId(null);
             const resultado = await eliminarProductoBD(id);
-            if (resultado.success) {
-                await cargarDatos();
-            } else {
-                alert(resultado.error);
-            }
+            if (resultado.success) await cargarDatos();
+            else alert(resultado.error);
         }
     };
 
-    // 👈 6. Función conectada a BD para Guardar Nuevo
-    const guardarNuevoProducto = async (e: React.FormEvent) => {
+    const abrirCrear = () => {
+        setIdEditando(null);
+        setNuevoProducto({ nombre: '', categoria: 'Papelería', precio: '', stock: '', stockMinimo: '', sucursal: sucursales[0]?.nombre || '' });
+        setIsModalOpen(true);
+    };
+
+    const abrirEditar = (producto: any) => {
+        setIdEditando(producto.id);
+        setNuevoProducto({
+            nombre: producto.nombre, categoria: producto.categoria,
+            precio: producto.precio.toString(), stock: producto.stock.toString(),
+            stockMinimo: producto.stockMinimo.toString(), sucursal: producto.sucursal
+        });
+        setMenuAbiertoId(null);
+        setIsModalOpen(true);
+    };
+
+    const procesarFormulario = async (e: React.FormEvent) => {
         e.preventDefault();
         setGuardando(true);
+        let resultado;
+        if (idEditando) resultado = await editarProductoBD(idEditando, nuevoProducto);
+        else resultado = await crearProductoBD(nuevoProducto);
 
-        const resultado = await crearProductoBD(nuevoProducto);
-
-        if (resultado.success) {
+        if (resultado?.success) {
             await cargarDatos();
             setIsModalOpen(false);
-            // Reseteamos el formulario
-            setNuevoProducto({
-                nombre: '', categoria: 'Papelería', precio: '', stock: '', stockMinimo: '', sucursal: sucursales[0]?.nombre || ''
-            });
-        } else {
-            alert(resultado.error);
-        }
+        } else alert(resultado?.error);
 
         setGuardando(false);
     };
@@ -148,34 +249,65 @@ export default function InventarioPage() {
         return <span className="flex items-center gap-1 text-[11px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded w-fit"><CheckCircle2 className="w-3 h-3" /> Óptimo</span>;
     };
 
-    if (cargando) {
-        return <div className="p-10 text-center text-slate-500 font-bold">Cargando inventario desde la Base de Datos...</div>;
-    }
+    if (cargando) return <div className="p-10 text-center text-slate-500 font-bold">Cargando inventario desde la Base de Datos...</div>;
 
     return (
         <div className="p-4 md:p-6 bg-slate-50 min-h-full flex flex-col">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+
+            <input type="file" accept=".xlsx, .xls, .csv" ref={fileInputRef} onChange={manejarSubidaExcel} className="hidden" />
+
+            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4">
+                <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2 shrink-0">
                     <Package className="text-blue-600 w-6 h-6" /> Control de Inventario
                 </h1>
-                <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2 shadow-sm">
-                    <Plus className="w-4 h-4" /> Nuevo Producto
-                </Button>
+
+                <div className="flex gap-2 w-full xl:w-auto flex-wrap md:flex-nowrap justify-end">
+                    <Button variant="outline" onClick={vaciarInventario} disabled={guardando || inventario.length === 0} className="flex-1 md:flex-none border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 flex items-center gap-2 shadow-sm">
+                        <Trash2 className="w-4 h-4" /> Vaciar
+                    </Button>
+
+                    <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importando} className="flex-1 md:flex-none border-blue-200 text-blue-700 hover:bg-blue-50 flex items-center gap-2 shadow-sm">
+                        {importando ? 'Procesando...' : <><Upload className="w-4 h-4" /> Importar Excel</>}
+                    </Button>
+
+                    {/* 👈 NUEVO: Botón de Exportar */}
+                    <Button variant="outline" onClick={descargarExcel} disabled={datosProcesados.length === 0} className="flex-1 md:flex-none border-green-200 text-green-700 hover:bg-green-50 flex items-center gap-2 shadow-sm">
+                        <Download className="w-4 h-4" /> Exportar Excel
+                    </Button>
+
+                    <Button onClick={abrirCrear} className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2 shadow-sm">
+                        <Plus className="w-4 h-4" /> Nuevo Producto
+                    </Button>
+                </div>
             </div>
 
-            <div className="bg-white p-3 rounded-t-lg shadow-sm border border-slate-200 border-b-0 flex flex-col md:flex-row gap-4 justify-between items-center">
-                <div className="relative w-full md:w-96">
+            <div className="bg-white p-3 rounded-t-lg shadow-sm border border-slate-200 border-b-0 flex flex-col xl:flex-row gap-4 justify-between items-center">
+                <div className="relative w-full xl:w-96">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                     <input type="text" placeholder="Buscar por nombre..." value={busqueda} onChange={(e) => { setBusqueda(e.target.value); setPaginaActual(1); }} className="w-full pl-9 pr-3 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500" />
                 </div>
-                <div className="flex items-center gap-2 w-full md:w-auto">
-                    <span className="text-sm font-medium text-slate-600">Sucursal:</span>
-                    <select value={sucursalFiltro} onChange={(e) => { setSucursalFiltro(e.target.value); setPaginaActual(1); }} className="w-full md:w-48 p-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50">
-                        <option value="Todas">🏢 Todas (Vista Admin)</option>
-                        {sucursales.map(sucursal => (
-                            <option key={sucursal.id} value={sucursal.nombre}>📍 {sucursal.nombre}</option>
-                        ))}
-                    </select>
+
+                <div className="flex flex-col sm:flex-row items-center gap-4 w-full xl:w-auto">
+                    {/* 👈 NUEVO: Selector de Estatus */}
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <span className="text-sm font-medium text-slate-600 shrink-0">Estatus:</span>
+                        <select value={estatusFiltro} onChange={(e) => { setEstatusFiltro(e.target.value); setPaginaActual(1); }} className="w-full sm:w-40 p-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50">
+                            <option value="Todos">⭕ Todos</option>
+                            <option value="Óptimo">✅ Óptimo</option>
+                            <option value="Bajo Stock">⚠️ Bajo Stock</option>
+                            <option value="Agotado">❌ Agotado</option>
+                        </select>
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <span className="text-sm font-medium text-slate-600 shrink-0">Sucursal:</span>
+                        <select value={sucursalFiltro} onChange={(e) => { setSucursalFiltro(e.target.value); setPaginaActual(1); }} className="w-full sm:w-40 p-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50">
+                            <option value="Todas">🏢 Todas</option>
+                            {sucursales.map(sucursal => (
+                                <option key={sucursal.id} value={sucursal.nombre}>📍 {sucursal.nombre}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -211,7 +343,7 @@ export default function InventarioPage() {
                                         {menuAbiertoId === item.id && (
                                             <div className="absolute right-8 top-8 w-36 bg-white rounded-lg shadow-xl border border-slate-100 z-50 py-1 overflow-hidden">
                                                 <button onClick={() => surtirProducto(item.id, item.sucursal)} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2"><ArrowUpCircle className="w-4 h-4" /> Surtir</button>
-                                                <button onClick={() => setMenuAbiertoId(null)} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"><Edit className="w-4 h-4" /> Editar</button>
+                                                <button onClick={() => abrirEditar(item)} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"><Edit className="w-4 h-4" /> Editar</button>
                                                 <hr className="border-slate-100 my-1" />
                                                 <button onClick={() => eliminarProducto(item.id)} className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"><Trash2 className="w-4 h-4" /> Eliminar</button>
                                             </div>
@@ -229,6 +361,7 @@ export default function InventarioPage() {
                     <span>Mostrar</span>
                     <select value={filasPorPagina} onChange={(e) => { setFilasPorPagina(Number(e.target.value)); setPaginaActual(1); }} className="border border-slate-200 rounded p-1 focus:ring-blue-500 focus:border-blue-500">
                         <option value={5}>5</option><option value={10}>10</option><option value={20}>20</option>
+                        <option value={50}>50</option>
                     </select>
                     <span>filas</span>
                 </div>
@@ -246,10 +379,12 @@ export default function InventarioPage() {
                 <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                            <h2 className="text-lg font-bold text-slate-800">Registrar Producto</h2>
+                            <h2 className="text-lg font-bold text-slate-800">
+                                {idEditando ? 'Editar Producto' : 'Registrar Producto'}
+                            </h2>
                             <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
                         </div>
-                        <form onSubmit={guardarNuevoProducto} className="p-6 space-y-4">
+                        <form onSubmit={procesarFormulario} className="p-6 space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
                                 <input required type="text" value={nuevoProducto.nombre} onChange={e => setNuevoProducto({ ...nuevoProducto, nombre: e.target.value })} className="w-full p-2 border border-slate-200 rounded-md text-sm" />
@@ -277,7 +412,7 @@ export default function InventarioPage() {
                                     <input required type="number" step="0.5" min="0" value={nuevoProducto.precio} onChange={e => setNuevoProducto({ ...nuevoProducto, precio: e.target.value })} className="w-full p-2 border border-slate-200 rounded-md text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Stock Inicial</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Stock Actual</label>
                                     <input required type="number" min="0" value={nuevoProducto.stock} onChange={e => setNuevoProducto({ ...nuevoProducto, stock: e.target.value })} className="w-full p-2 border border-slate-200 rounded-md text-sm" />
                                 </div>
                                 <div>
@@ -288,7 +423,7 @@ export default function InventarioPage() {
                             <div className="pt-4 flex justify-end gap-2 border-t border-slate-100 mt-6">
                                 <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
                                 <Button type="submit" disabled={guardando} className="bg-blue-600 hover:bg-blue-700 text-white">
-                                    {guardando ? 'Guardando...' : 'Guardar'}
+                                    {guardando ? 'Guardando...' : (idEditando ? 'Guardar Cambios' : 'Crear Producto')}
                                 </Button>
                             </div>
                         </form>

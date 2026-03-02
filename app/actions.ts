@@ -81,6 +81,27 @@ export async function crearProductoBD(data: any) {
     }
 }
 
+export async function editarProductoBD(id: string, data: any) {
+    try {
+        await prisma.producto.update({
+            where: { id: id },
+            data: {
+                nombre: data.nombre,
+                categoria: data.categoria,
+                precio: Number(data.precio),
+                stock: Number(data.stock),
+                stockMinimo: Number(data.stockMinimo),
+                sucursal: data.sucursal,
+            }
+        });
+        revalidatePath('/inventario');
+        return { success: true };
+    } catch (error) {
+        console.error(error);
+        return { success: false, error: 'Error al actualizar el producto.' };
+    }
+}
+
 export async function surtirProductoBD(id: string, cantidadExtra: number) {
     try {
         // 1. Buscamos el producto actual para saber cuánto stock tiene
@@ -188,4 +209,48 @@ export async function obtenerReportesBD() {
             }
         }
     });
+}
+export async function importarInventarioMasivoBD(productos: any[]) {
+    try {
+        let insertados = 0;
+
+        // Usamos una transacción para que sea más rápido y seguro
+        await prisma.$transaction(async (tx) => {
+            for (const prod of productos) {
+                // Validamos que al menos tenga nombre
+                if (!prod.Nombre && !prod.nombre) continue;
+
+                await tx.producto.create({
+                    data: {
+                        // Soportamos si en el Excel lo escribieron con mayúscula o minúscula
+                        nombre: String(prod.Nombre || prod.nombre || 'Sin nombre'),
+                        categoria: String(prod.Categoria || prod.categoria || 'Papelería'),
+                        precio: Number(prod.Precio || prod.precio || 0),
+                        stock: Number(prod.Stock || prod.stock || 0),
+                        stockMinimo: Number(prod.StockMinimo || prod.stockMinimo || 5),
+                        sucursal: String(prod.Sucursal || prod.sucursal || 'Centro'),
+                    }
+                });
+                insertados++;
+            }
+        });
+
+        revalidatePath('/inventario');
+        return { success: true, count: insertados };
+    } catch (error) {
+        console.error("Error importando Excel:", error);
+        return { success: false, error: 'Hubo un error al procesar el archivo en la base de datos.' };
+    }
+}
+export async function eliminarTodoInventarioBD() {
+    try {
+        // deleteMany sin condiciones ({}) borra TODOS los registros de esa tabla
+        await prisma.producto.deleteMany({});
+
+        revalidatePath('/inventario');
+        return { success: true };
+    } catch (error) {
+        console.error("Error al vaciar inventario:", error);
+        return { success: false, error: 'Error al eliminar todos los productos.' };
+    }
 }
