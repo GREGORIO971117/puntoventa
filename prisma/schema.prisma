@@ -30,6 +30,7 @@ model Producto {
   sucursal    String   // Para saber a qué sucursal pertenece este stock
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  codigoBarras String? @unique
 }
 
 // Historial de Ventas real
