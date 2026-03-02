@@ -1,34 +1,44 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Store, Plus, MapPin, UserCircle, KeyRound, ShieldCheck, X, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useApp } from '@/context/AppContext';
-import { UsuarioSucursal } from '@/types';
+// 👈 1. Importamos las acciones del servidor en lugar del Contexto
+import { obtenerSucursales, crearSucursalBD, editarSucursalBD } from '@/app/actions';
 
 export default function SucursalesPage() {
-    const { sucursales, agregarSucursal, editarSucursal } = useApp();
+    // 👈 2. Estado local para guardar las sucursales de la BD
+    const [sucursales, setSucursales] = useState<any[]>([]);
+    const [cargando, setCargando] = useState(true);
 
-    // Estados para manejar el Modal
     const [isModalOpen, setIsModalOpen] = useState(false);
-
-    // Guardamos el ID de la sucursal si estamos editando (null si estamos creando)
     const [idEditando, setIdEditando] = useState<string | null>(null);
+    const [guardando, setGuardando] = useState(false);
 
-    // Estado unificado del formulario
     const [formData, setFormData] = useState({
         nombre: '', encargado: '', direccion: '', username: '', password: ''
     });
 
-    // Función para abrir modal en modo CREAR
+    // 👈 3. Efecto para cargar las sucursales reales al abrir la página
+    const cargarDatos = async () => {
+        setCargando(true);
+        const datosBD = await obtenerSucursales();
+        // Filtramos para no mostrar al "admin" en la lista de tiendas físicas
+        setSucursales(datosBD.filter((s: any) => s.rol !== 'admin'));
+        setCargando(false);
+    };
+
+    useEffect(() => {
+        cargarDatos();
+    }, []);
+
     const abrirCrear = () => {
         setIdEditando(null);
         setFormData({ nombre: '', encargado: '', direccion: '', username: '', password: '' });
         setIsModalOpen(true);
     };
 
-    // Función para abrir modal en modo EDITAR
-    const abrirEditar = (sucursal: UsuarioSucursal) => {
+    const abrirEditar = (sucursal: any) => {
         setIdEditando(sucursal.id);
         setFormData({
             nombre: sucursal.nombre,
@@ -40,22 +50,31 @@ export default function SucursalesPage() {
         setIsModalOpen(true);
     };
 
-    // Función que se ejecuta al darle "Guardar" al formulario
-    const procesarFormulario = (e: React.FormEvent) => {
+    // 👈 4. Función conectada a Postgres
+    const procesarFormulario = async (e: React.FormEvent) => {
         e.preventDefault();
+        setGuardando(true);
 
+        let resultado;
         if (idEditando) {
-            // MODO EDICIÓN
-            editarSucursal(idEditando, { id: idEditando, ...formData });
+            resultado = await editarSucursalBD(idEditando, formData);
         } else {
-            // MODO CREACIÓN
-            // Generamos un ID simple basado en el timestamp para evitar IDs duplicados al borrar
-            const nuevoId = Date.now().toString();
-            agregarSucursal({ id: nuevoId, ...formData });
+            resultado = await crearSucursalBD(formData);
         }
 
-        setIsModalOpen(false);
+        if (resultado.success) {
+            await cargarDatos(); // Recargamos la lista desde la BD
+            setIsModalOpen(false);
+        } else {
+            alert(resultado.error); // Mostramos error si hay usuario duplicado
+        }
+
+        setGuardando(false);
     };
+
+    if (cargando) {
+        return <div className="p-10 text-center text-slate-500 font-bold">Cargando sucursales desde la Base de Datos...</div>;
+    }
 
     return (
         <div className="p-4 md:p-6 bg-slate-50 min-h-full flex flex-col gap-6">
@@ -89,7 +108,6 @@ export default function SucursalesPage() {
                             </div>
 
                             <div className="flex items-center gap-2">
-                                {/* Botón de Editar */}
                                 <button
                                     onClick={() => abrirEditar(sucursal)}
                                     className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
@@ -136,14 +154,11 @@ export default function SucursalesPage() {
                 ))}
             </div>
 
-            {/* ==============================================
-          MODAL UNIFICADO (CREAR / EDITAR SUCURSAL)
-          ============================================== */}
+            {/* MODAL UNIFICADO (CREAR / EDITAR SUCURSAL) */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
 
-                        {/* Título Dinámico */}
                         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                             <h2 className="text-lg font-bold text-slate-800">
                                 {idEditando ? `Editar Sucursal ${formData.nombre}` : 'Registrar Nueva Sucursal'}
@@ -154,7 +169,6 @@ export default function SucursalesPage() {
                         </div>
 
                         <form onSubmit={procesarFormulario} className="p-6 space-y-5">
-
                             <div className="space-y-4 border-b border-slate-100 pb-5">
                                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
                                     <Store className="w-4 h-4 text-blue-500" /> Datos de la Tienda
@@ -165,7 +179,7 @@ export default function SucursalesPage() {
                                         <input required type="text" value={formData.nombre} onChange={e => setFormData({ ...formData, nombre: e.target.value })} className="w-full p-2 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ej. Galerías" />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Encargado Responsable</label>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Encargado</label>
                                         <input required type="text" value={formData.encargado} onChange={e => setFormData({ ...formData, encargado: e.target.value })} className="w-full p-2 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Nombre completo" />
                                     </div>
                                 </div>
@@ -179,10 +193,9 @@ export default function SucursalesPage() {
                                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
                                     <KeyRound className="w-4 h-4 text-blue-500" /> Credenciales de Sistema
                                 </h3>
-                                <p className="text-xs text-slate-500">Con estos datos la sucursal iniciará sesión en el Punto de Venta.</p>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Nombre de Usuario</label>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Usuario</label>
                                         <input required type="text" value={formData.username} onChange={e => setFormData({ ...formData, username: e.target.value })} className="w-full p-2 border border-slate-200 rounded-md text-sm bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none font-mono" placeholder="ej. caja_galerias" />
                                     </div>
                                     <div>
@@ -194,15 +207,14 @@ export default function SucursalesPage() {
 
                             <div className="pt-2 flex justify-end gap-3 mt-6">
                                 <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-                                <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-8">
-                                    {idEditando ? 'Guardar Cambios' : 'Registrar Sucursal'}
+                                <Button type="submit" disabled={guardando} className="bg-blue-600 hover:bg-blue-700 text-white px-8">
+                                    {guardando ? 'Guardando...' : (idEditando ? 'Guardar Cambios' : 'Registrar Sucursal')}
                                 </Button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
-
         </div>
     );
 }

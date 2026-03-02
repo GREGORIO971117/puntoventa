@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// La entidad de Sucursal (que también es el usuario)
+model Sucursal {
+  id        String   @id @default(cuid())
+  nombre    String   @unique
+  encargado String
+  direccion String
+  username  String   @unique
+  password  String
+  rol       String   @default("cajero") // "admin" o "cajero"
+  ventas    Venta[]
+  createdAt DateTime @default(now())
+}
+
+// El catálogo maestro de productos
+model Producto {
+  id          String   @id @default(cuid())
+  nombre      String
+  categoria   String
+  precio      Float
+  stock       Int      @default(0)
+  stockMinimo Int      @default(5)
+  sucursal    String   // Para saber a qué sucursal pertenece este stock
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Historial de Ventas real
+model Venta {
+  id             String   @id @default(cuid())
+  fecha          DateTime @default(now())
+  sucursalId     String
+  sucursal       Sucursal @relation(fields: [sucursalId], references: [id])
+  items          Json     // Guardaremos el array de productos del carrito aquí
+  totalArticulos Int
+  total          Float
+  metodoPago     String   @default("Efectivo")
+}

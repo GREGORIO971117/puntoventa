@@ -1,22 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Package, AlertTriangle, XCircle, CheckCircle2, Plus, Search,
     MoreVertical, Edit, Trash2, ArrowUpCircle, X,
     ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useApp } from '@/context/AppContext';
-import { NombreSucursal, CategoriaProducto } from '@/types';
+// 👈 1. Importamos las acciones reales del servidor
+import { obtenerInventario, obtenerSucursales, crearProductoBD, surtirProductoBD, eliminarProductoBD } from '@/app/actions';
 
 export default function InventarioPage() {
-    // 👈 1. Traemos las sucursales
-    const { inventario, surtirInventario, agregarNuevoProducto, sucursales } = useApp();
+    // 👈 2. Estados locales para la BD
+    const [inventario, setInventario] = useState<any[]>([]);
+    const [sucursales, setSucursales] = useState<any[]>([]);
+    const [cargando, setCargando] = useState(true);
+    const [guardando, setGuardando] = useState(false);
 
-    const [sucursalFiltro, setSucursalFiltro] = useState<NombreSucursal | 'Todas'>('Todas');
+    const [sucursalFiltro, setSucursalFiltro] = useState<string | 'Todas'>('Todas');
     const [busqueda, setBusqueda] = useState('');
-    const [menuAbiertoId, setMenuAbiertoId] = useState<number | null>(null);
+    const [menuAbiertoId, setMenuAbiertoId] = useState<string | null>(null); // Los IDs de Prisma son strings
 
     const [ordenConfig, setOrdenConfig] = useState<{ clave: string, direccion: 'asc' | 'desc' } | null>(null);
     const [filasPorPagina, setFilasPorPagina] = useState(5);
@@ -24,10 +27,33 @@ export default function InventarioPage() {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    // 👈 2. El nuevo producto toma la primera sucursal por defecto
     const [nuevoProducto, setNuevoProducto] = useState({
-        nombre: '', categoria: 'Papelería', precio: '', stock: '', stockMinimo: '', sucursal: sucursales.length > 0 ? sucursales[0].nombre : ''
+        nombre: '', categoria: 'Papelería', precio: '', stock: '', stockMinimo: '', sucursal: ''
     });
+
+    // 👈 3. Efecto para cargar datos reales al montar la página
+    const cargarDatos = async () => {
+        setCargando(true);
+        const [datosInventario, datosSucursales] = await Promise.all([
+            obtenerInventario(),
+            obtenerSucursales()
+        ]);
+
+        // Filtramos para quitar al admin de la lista de sucursales
+        const sucursalesFisicas = datosSucursales.filter((s: any) => s.rol !== 'admin');
+
+        setInventario(datosInventario);
+        setSucursales(sucursalesFisicas);
+
+        if (sucursalesFisicas.length > 0) {
+            setNuevoProducto(prev => ({ ...prev, sucursal: sucursalesFisicas[0].nombre }));
+        }
+        setCargando(false);
+    };
+
+    useEffect(() => {
+        cargarDatos();
+    }, []);
 
     let datosProcesados = inventario.filter((item) => {
         const coincideSucursal = sucursalFiltro === 'Todas' || item.sucursal === sucursalFiltro;
@@ -62,34 +88,58 @@ export default function InventarioPage() {
             : <ChevronDown className="w-3 h-3 text-blue-600 inline ml-1" />;
     };
 
-    const surtirProducto = (id: number, sucursal: string) => {
-        const cantidad = window.prompt('¿Cuántas piezas vas a ingresar al inventario?', '10');
+    // 👈 4. Función conectada a BD para Surtir
+    const surtirProducto = async (id: string, sucursal: string) => {
+        const cantidad = window.prompt(`¿Cuántas piezas vas a ingresar al inventario de ${sucursal}?`, '10');
         if (cantidad && !isNaN(Number(cantidad))) {
-            surtirInventario(id, sucursal as NombreSucursal, Number(cantidad));
+            const numCantidad = Number(cantidad);
+            if (numCantidad > 0) {
+                setMenuAbiertoId(null);
+                const resultado = await surtirProductoBD(id, numCantidad);
+                if (resultado.success) {
+                    await cargarDatos(); // Recargamos para ver el nuevo stock
+                } else {
+                    alert(resultado.error);
+                }
+            }
+        } else {
+            setMenuAbiertoId(null);
         }
-        setMenuAbiertoId(null);
     };
 
-    const eliminarProducto = (id: number) => {
-        alert("La función de eliminar requiere permisos de administrador. (En construcción)");
-        setMenuAbiertoId(null);
+    // 👈 5. Función conectada a BD para Eliminar
+    const eliminarProducto = async (id: string) => {
+        const confirmar = window.confirm("¿Estás seguro de que deseas eliminar este producto permanentemente de la Base de Datos?");
+        if (confirmar) {
+            setMenuAbiertoId(null);
+            const resultado = await eliminarProductoBD(id);
+            if (resultado.success) {
+                await cargarDatos();
+            } else {
+                alert(resultado.error);
+            }
+        }
     };
 
-    const guardarNuevoProducto = (e: React.FormEvent) => {
+    // 👈 6. Función conectada a BD para Guardar Nuevo
+    const guardarNuevoProducto = async (e: React.FormEvent) => {
         e.preventDefault();
-        const idNuevo = inventario.length ? Math.max(...inventario.map(i => i.id)) + 1 : 1;
+        setGuardando(true);
 
-        agregarNuevoProducto({
-            id: idNuevo,
-            nombre: nuevoProducto.nombre,
-            categoria: nuevoProducto.categoria as CategoriaProducto,
-            precio: Number(nuevoProducto.precio),
-            stock: Number(nuevoProducto.stock),
-            stockMinimo: Number(nuevoProducto.stockMinimo),
-            sucursal: nuevoProducto.sucursal as NombreSucursal
-        });
+        const resultado = await crearProductoBD(nuevoProducto);
 
-        setIsModalOpen(false);
+        if (resultado.success) {
+            await cargarDatos();
+            setIsModalOpen(false);
+            // Reseteamos el formulario
+            setNuevoProducto({
+                nombre: '', categoria: 'Papelería', precio: '', stock: '', stockMinimo: '', sucursal: sucursales[0]?.nombre || ''
+            });
+        } else {
+            alert(resultado.error);
+        }
+
+        setGuardando(false);
     };
 
     const getEstadoBadge = (stock: number, minimo: number) => {
@@ -97,6 +147,10 @@ export default function InventarioPage() {
         if (stock <= minimo) return <span className="flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded w-fit"><AlertTriangle className="w-3 h-3" /> Bajo Stock</span>;
         return <span className="flex items-center gap-1 text-[11px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded w-fit"><CheckCircle2 className="w-3 h-3" /> Óptimo</span>;
     };
+
+    if (cargando) {
+        return <div className="p-10 text-center text-slate-500 font-bold">Cargando inventario desde la Base de Datos...</div>;
+    }
 
     return (
         <div className="p-4 md:p-6 bg-slate-50 min-h-full flex flex-col">
@@ -116,9 +170,8 @@ export default function InventarioPage() {
                 </div>
                 <div className="flex items-center gap-2 w-full md:w-auto">
                     <span className="text-sm font-medium text-slate-600">Sucursal:</span>
-                    <select value={sucursalFiltro} onChange={(e) => { setSucursalFiltro(e.target.value as any); setPaginaActual(1); }} className="w-full md:w-48 p-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50">
+                    <select value={sucursalFiltro} onChange={(e) => { setSucursalFiltro(e.target.value); setPaginaActual(1); }} className="w-full md:w-48 p-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50">
                         <option value="Todas">🏢 Todas (Vista Admin)</option>
-                        {/* 👈 3. Filtro Global Dinámico */}
                         {sucursales.map(sucursal => (
                             <option key={sucursal.id} value={sucursal.nombre}>📍 {sucursal.nombre}</option>
                         ))}
@@ -147,7 +200,7 @@ export default function InventarioPage() {
                                 <tr key={item.id} className="hover:bg-blue-50/30 transition-colors">
                                     <td className="py-2.5 px-4 font-medium text-slate-800">{item.nombre}</td>
                                     <td className="py-2.5 px-4 text-slate-600">{item.categoria}</td>
-                                    <td className="py-2.5 px-4 text-slate-800 font-medium text-right">${item.precio.toFixed(2)}</td>
+                                    <td className="py-2.5 px-4 text-slate-800 font-medium text-right">${Number(item.precio).toFixed(2)}</td>
                                     <td className="py-2.5 px-4"><span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-semibold border border-slate-200">{item.sucursal}</span></td>
                                     <td className="py-2.5 px-4 text-center"><span className={`font-bold ${item.stock === 0 ? 'text-red-600' : 'text-slate-800'}`}>{item.stock}</span></td>
                                     <td className="py-2.5 px-4">{getEstadoBadge(item.stock, item.stockMinimo)}</td>
@@ -212,7 +265,6 @@ export default function InventarioPage() {
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Sucursal</label>
                                     <select value={nuevoProducto.sucursal} onChange={e => setNuevoProducto({ ...nuevoProducto, sucursal: e.target.value })} className="w-full p-2 border border-slate-200 rounded-md text-sm">
-                                        {/* 👈 4. Selector dinámico para asignar producto nuevo */}
                                         {sucursales.map(sucursal => (
                                             <option key={sucursal.id} value={sucursal.nombre}>{sucursal.nombre}</option>
                                         ))}
@@ -235,7 +287,9 @@ export default function InventarioPage() {
                             </div>
                             <div className="pt-4 flex justify-end gap-2 border-t border-slate-100 mt-6">
                                 <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-                                <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">Guardar</Button>
+                                <Button type="submit" disabled={guardando} className="bg-blue-600 hover:bg-blue-700 text-white">
+                                    {guardando ? 'Guardando...' : 'Guardar'}
+                                </Button>
                             </div>
                         </form>
                     </div>

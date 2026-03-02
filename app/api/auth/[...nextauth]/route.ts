@@ -1,5 +1,6 @@
 import NextAuth, { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { prisma } from "@/lib/prisma"; // 👈 Importamos nuestra conexión real a BD
 
 export const authOptions: NextAuthOptions = {
     providers: [
@@ -10,38 +11,39 @@ export const authOptions: NextAuthOptions = {
                 password: { label: "Contraseña", type: "password" }
             },
             async authorize(credentials) {
-                // 1. Aquí simulamos la Base de Datos real. 
-                // Cuando conectes SQL o Dexie, aquí harás la consulta a la base de datos.
-                const sucursalesDB = [
-                    { id: '1', nombre: 'HelloKitty', username: 'caja_HelloKitty', password: '123', rol: 'cajero' },
-                    { id: '2', nombre: 'Norte', username: 'caja_norte', password: '123', rol: 'cajero' },
-                    { id: 'admin', nombre: 'Admin General', username: 'admin', password: 'admin123', rol: 'admin' }
-                ];
+                if (!credentials?.username || !credentials?.password) return null;
 
-                // 2. Buscamos si las credenciales coinciden
-                const usuarioValido = sucursalesDB.find(
-                    (u) => u.username === credentials?.username && u.password === credentials?.password
-                );
+                // 👈 1. BUSCAMOS EN POSTGRESQL DIRECTAMENTE
+                const sucursal = await prisma.sucursal.findUnique({
+                    where: { username: credentials.username }
+                });
 
-                // 3. Si es válido, lo dejamos pasar y le adjuntamos su ID, Nombre y Rol
-                if (usuarioValido) {
-                    return { id: usuarioValido.id, name: usuarioValido.nombre, role: usuarioValido.rol };
+                // 2. Si no existe la sucursal, rechazamos
+                if (!sucursal) return null;
+
+                // 3. Validamos la contraseña (Nota: En un futuro, si quieres más seguridad, 
+                // aquí usaríamos bcrypt para comparar contraseñas encriptadas)
+                if (sucursal.password === credentials.password) {
+                    // 4. Si es correcto, retornamos los datos para crear la Cookie JWT
+                    return {
+                        id: sucursal.id,
+                        name: sucursal.nombre,
+                        role: sucursal.rol
+                    };
                 }
 
-                // Si no, NextAuth lanzará un error automático
+                // Contraseña incorrecta
                 return null;
             }
         })
     ],
     callbacks: {
-        // 4. Inyectamos datos extra en el JWT (como el Rol)
         async jwt({ token, user }) {
             if (user) {
                 token.role = (user as any).role;
             }
             return token;
         },
-        // 5. Pasamos esos datos a la sesión del Frontend para que el Navbar los pueda leer
         async session({ session, token }) {
             if (session.user) {
                 (session.user as any).id = token.sub;
@@ -51,14 +53,12 @@ export const authOptions: NextAuthOptions = {
         }
     },
     pages: {
-        signIn: '/', // Si alguien no autorizado intenta entrar, lo mandamos a la raíz (Tu Login)
+        signIn: '/',
     },
     session: {
-        strategy: "jwt", // Usamos el estándar JWT
+        strategy: "jwt",
     }
 };
 
 const handler = NextAuth(authOptions);
-
-// Exportamos los métodos GET y POST que usa Next.js App Router
 export { handler as GET, handler as POST };

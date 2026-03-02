@@ -6,30 +6,59 @@ import {
     Calendar, Clock, Receipt, Eye, X
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useApp } from '@/context/AppContext'; // 👈 1. Importamos Contexto Global
+// 👈 1. Importamos las acciones reales del servidor
+import { obtenerReportesBD, obtenerSucursales } from '@/app/actions';
 
 export default function ReportesPage() {
-    const { ventas, sucursales } = useApp(); // 👈 2. Obtenemos las ventas reales de la aplicación
+    // 👈 2. Estados locales para guardar los datos de la BD
+    const [ventas, setVentas] = useState<any[]>([]);
+    const [sucursales, setSucursales] = useState<any[]>([]);
+    const [cargando, setCargando] = useState(true);
 
     const [sucursalFiltro, setSucursalFiltro] = useState('Todas');
-    const [fechaInicio, setFechaInicio] = useState(''); // Lo dejamos vacío para que lea el histórico por defecto
+    const [fechaInicio, setFechaInicio] = useState('');
     const [fechaFin, setFechaFin] = useState('');
     const [ticketSeleccionado, setTicketSeleccionado] = useState<any | null>(null);
     const [montado, setMontado] = useState(false);
 
+    // 👈 3. Efecto para cargar los datos reales al montar la página
+    const cargarDatos = async () => {
+        setCargando(true);
+        const [datosVentas, datosSucursales] = await Promise.all([
+            obtenerReportesBD(),
+            obtenerSucursales()
+        ]);
+
+        // Formateamos los datos de la BD para que las gráficas los entiendan
+        const ventasFormateadas = datosVentas.map(venta => {
+            const fechaObj = new Date(venta.fecha);
+            return {
+                ...venta,
+                fechaFormateada: fechaObj.toISOString().split('T')[0], // ej. "2026-03-02"
+                horaFormateada: fechaObj.toTimeString().split(' ')[0], // ej. "14:30:00"
+                nombreSucursal: venta.sucursal.nombre // Extraemos el nombre de la relación
+            };
+        });
+
+        setVentas(ventasFormateadas);
+        setSucursales(datosSucursales.filter((s: any) => s.rol !== 'admin'));
+        setCargando(false);
+    };
+
     useEffect(() => {
         setMontado(true);
+        cargarDatos();
     }, []);
 
     // =========================================================
-    // EL MOTOR ANALÍTICO: Mucho más limpio gracias al tipado estricto
+    // EL MOTOR ANALÍTICO
     // =========================================================
     const analisisDatos = useMemo(() => {
         // 1. Filtrar las ventas por sucursal y fechas
         const ventasFiltradas = ventas.filter(venta => {
-            const pasaSucursal = sucursalFiltro === 'Todas' || venta.sucursal === sucursalFiltro;
-            const pasaFechaInicio = !fechaInicio || venta.fecha >= fechaInicio;
-            const pasaFechaFin = !fechaFin || venta.fecha <= fechaFin;
+            const pasaSucursal = sucursalFiltro === 'Todas' || venta.nombreSucursal === sucursalFiltro;
+            const pasaFechaInicio = !fechaInicio || venta.fechaFormateada >= fechaInicio;
+            const pasaFechaFin = !fechaFin || venta.fechaFormateada <= fechaFin;
             return pasaSucursal && pasaFechaInicio && pasaFechaFin;
         });
 
@@ -45,17 +74,22 @@ export default function ReportesPage() {
             totalIngresos += venta.total;
             totalArticulos += venta.totalArticulos;
 
-            const ejeX = esUnSoloDia ? venta.hora.substring(0, 2) + ':00' : venta.fecha;
+            const ejeX = esUnSoloDia ? venta.horaFormateada.substring(0, 2) + ':00' : venta.fechaFormateada;
             if (!mapaGrafica[ejeX]) mapaGrafica[ejeX] = 0;
             mapaGrafica[ejeX] += venta.total;
 
-            venta.productos.forEach(prod => {
-                if (!mapaProductos[prod.nombre]) {
-                    mapaProductos[prod.nombre] = { nombre: prod.nombre, vendidas: 0, ingresos: 0 };
-                }
-                mapaProductos[prod.nombre].vendidas += prod.cantidad;
-                mapaProductos[prod.nombre].ingresos += (prod.cantidad * prod.precio);
-            });
+            // En Prisma, la columna 'items' es un JSON, la iteramos normal
+            const productosJSON = typeof venta.items === 'string' ? JSON.parse(venta.items) : venta.items;
+
+            if (productosJSON && Array.isArray(productosJSON)) {
+                productosJSON.forEach((prod: any) => {
+                    if (!mapaProductos[prod.nombre]) {
+                        mapaProductos[prod.nombre] = { nombre: prod.nombre, vendidas: 0, ingresos: 0 };
+                    }
+                    mapaProductos[prod.nombre].vendidas += prod.cantidad;
+                    mapaProductos[prod.nombre].ingresos += (prod.cantidad * prod.precio);
+                });
+            }
         });
 
         // 3. Ordenar para obtener el Top 10
@@ -70,12 +104,12 @@ export default function ReportesPage() {
         }));
 
         return { ventasFiltradas, totalIngresos, totalArticulos, masVendidos, menosVendidos, datosGrafica, esUnSoloDia };
-    }, [ventas, sucursalFiltro, fechaInicio, fechaFin]); // Añadimos `ventas` a las dependencias
+    }, [ventas, sucursalFiltro, fechaInicio, fechaFin]);
 
     const { ventasFiltradas, totalIngresos, totalArticulos, masVendidos, datosGrafica, esUnSoloDia } = analisisDatos;
 
     const aplicarFiltroRapido = (tipo: string) => {
-        const hoy = new Date().toISOString().split('T')[0]; // Toma la fecha real del sistema
+        const hoy = new Date().toISOString().split('T')[0];
         if (tipo === 'hoy') { setFechaInicio(hoy); setFechaFin(hoy); }
         if (tipo === 'mes') {
             const yyyyMm = hoy.substring(0, 7);
@@ -97,7 +131,8 @@ export default function ReportesPage() {
         return null;
     };
 
-    if (!montado) return <div className="p-6">Cargando...</div>;
+    if (!montado) return null;
+    if (cargando) return <div className="p-10 text-center text-slate-500 font-bold mt-20">Analizando datos de ventas...</div>;
 
     return (
         <div className="p-4 md:p-6 bg-slate-50 min-h-full flex flex-col gap-6">
@@ -110,9 +145,9 @@ export default function ReportesPage() {
 
                 <div className="flex flex-col md:flex-row items-end md:items-center gap-4 w-full xl:w-auto">
                     <div className="flex bg-slate-100 p-1 rounded-lg">
-                        <button onClick={() => aplicarFiltroRapido('hoy')} className="px-3 py-1.5 text-sm font-semibold rounded-md text-slate-600 hover:bg-white shadow-sm">Hoy</button>
+                        <button onClick={() => aplicarFiltroRapido('hoy')} className={`px-3 py-1.5 text-sm font-semibold rounded-md ${fechaInicio === new Date().toISOString().split('T')[0] ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:bg-white hover:shadow-sm'}`}>Hoy</button>
                         <button onClick={() => aplicarFiltroRapido('mes')} className="px-3 py-1.5 text-sm font-semibold rounded-md text-slate-600 hover:bg-white shadow-sm">Este Mes</button>
-                        <button onClick={() => aplicarFiltroRapido('todos')} className="px-3 py-1.5 text-sm font-semibold rounded-md text-slate-600 hover:bg-white shadow-sm">Histórico</button>
+                        <button onClick={() => aplicarFiltroRapido('todos')} className={`px-3 py-1.5 text-sm font-semibold rounded-md ${!fechaInicio ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:bg-white hover:shadow-sm'}`}>Histórico</button>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -125,7 +160,6 @@ export default function ReportesPage() {
                         <Calendar className="w-4 h-4 text-slate-500 ml-2" />
                         <select value={sucursalFiltro} onChange={(e) => setSucursalFiltro(e.target.value)} className="w-36 p-1 text-sm font-bold text-blue-700 bg-transparent border-none focus:outline-none cursor-pointer">
                             <option value="Todas">🏢 Todas las Suc.</option>
-                            {/* 👈 Dibujamos las sucursales dinámicamente desde el Contexto */}
                             {sucursales.map(sucursal => (
                                 <option key={sucursal.id} value={sucursal.nombre}>
                                     📍 {sucursal.nombre}
@@ -142,7 +176,7 @@ export default function ReportesPage() {
                     <div className="bg-green-100 p-3 rounded-xl"><DollarSign className="text-green-600 w-6 h-6" /></div>
                     <div>
                         <p className="text-sm font-medium text-slate-500">Ingresos Totales</p>
-                        <h3 className="text-2xl font-black text-slate-800">${totalIngresos.toLocaleString()}</h3>
+                        <h3 className="text-2xl font-black text-slate-800">${totalIngresos.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
                     </div>
                 </div>
 
@@ -218,7 +252,7 @@ export default function ReportesPage() {
                                             <span className="text-xs text-slate-500">{prod.vendidas} unds.</span>
                                         </div>
                                     </div>
-                                    <span className="text-sm font-bold text-slate-800">${prod.ingresos.toLocaleString()}</span>
+                                    <span className="text-sm font-bold text-slate-800">${prod.ingresos.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                 </div>
                             ))
                         )}
@@ -258,26 +292,26 @@ export default function ReportesPage() {
                                 ventasFiltradas.map((venta) => (
                                     <tr key={venta.id} className="hover:bg-blue-50/30 transition-colors">
                                         <td className="py-3 px-6">
-                                            <div className="font-bold text-blue-600">{venta.id}</div>
-                                            <div className="text-xs text-slate-500 font-medium">{venta.fecha} • {venta.hora}</div>
+                                            <div className="font-bold text-blue-600 text-xs">{venta.id}</div>
+                                            <div className="text-xs text-slate-500 font-medium mt-1">{venta.fechaFormateada} • {venta.horaFormateada}</div>
                                         </td>
                                         <td className="py-3 px-6">
                                             <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-semibold border border-slate-200">
-                                                {venta.sucursal}
+                                                {venta.nombreSucursal}
                                             </span>
                                         </td>
                                         <td className="py-3 px-6 text-center text-slate-600 font-medium">
                                             {venta.totalArticulos}
                                         </td>
                                         <td className="py-3 px-6 text-center">
-                                            <span className={`px-2 py-1 rounded text-xs font-semibold ${venta.metodo === 'Efectivo' ? 'bg-green-100 text-green-700' :
-                                                venta.metodo === 'Tarjeta' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700'
+                                            <span className={`px-2 py-1 rounded text-xs font-semibold ${venta.metodoPago === 'Efectivo' ? 'bg-green-100 text-green-700' :
+                                                venta.metodoPago === 'Tarjeta' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700'
                                                 }`}>
-                                                {venta.metodo}
+                                                {venta.metodoPago}
                                             </span>
                                         </td>
                                         <td className="py-3 px-6 text-right font-bold text-slate-800">
-                                            ${venta.total.toFixed(2)}
+                                            ${venta.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </td>
                                         <td className="py-3 px-6 text-center">
                                             <button
@@ -301,8 +335,8 @@ export default function ReportesPage() {
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
                         <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 text-center relative">
                             <div className="w-full">
-                                <h2 className="text-lg font-bold text-slate-800">TICKET {ticketSeleccionado.id}</h2>
-                                <p className="text-xs text-slate-500 mt-1">{ticketSeleccionado.fecha} a las {ticketSeleccionado.hora} • Sucursal {ticketSeleccionado.sucursal}</p>
+                                <h2 className="text-lg font-bold text-slate-800 truncate px-4" title={ticketSeleccionado.id}>TICKET ...{ticketSeleccionado.id.substring(ticketSeleccionado.id.length - 8)}</h2>
+                                <p className="text-xs text-slate-500 mt-1">{ticketSeleccionado.fechaFormateada} a las {ticketSeleccionado.horaFormateada}</p>
                             </div>
                             <button onClick={() => setTicketSeleccionado(null)} className="absolute right-4 top-4 text-slate-400 hover:text-red-500 transition-colors">
                                 <X className="w-6 h-6" />
@@ -311,11 +345,11 @@ export default function ReportesPage() {
 
                         <div className="p-6 overflow-y-auto flex-1">
                             <div className="space-y-4">
-                                {ticketSeleccionado.productos.map((prod: any, i: number) => (
+                                {(typeof ticketSeleccionado.items === 'string' ? JSON.parse(ticketSeleccionado.items) : ticketSeleccionado.items).map((prod: any, i: number) => (
                                     <div key={i} className="flex justify-between items-start border-b border-dashed border-slate-200 pb-3">
                                         <div>
                                             <p className="text-sm font-semibold text-slate-800">{prod.nombre}</p>
-                                            <p className="text-xs text-slate-500 mt-0.5">{prod.cantidad} x ${prod.precio.toFixed(2)}</p>
+                                            <p className="text-xs text-slate-500 mt-0.5">{prod.cantidad} x ${Number(prod.precio).toFixed(2)}</p>
                                         </div>
                                         <span className="font-bold text-slate-800">${(prod.cantidad * prod.precio).toFixed(2)}</span>
                                     </div>
@@ -326,11 +360,15 @@ export default function ReportesPage() {
                         <div className="p-6 bg-slate-50 border-t border-slate-200">
                             <div className="flex justify-between text-sm text-slate-600 mb-2">
                                 <span>Método de Pago:</span>
-                                <span className="font-semibold">{ticketSeleccionado.metodo}</span>
+                                <span className="font-semibold">{ticketSeleccionado.metodoPago}</span>
                             </div>
-                            <div className="flex justify-between items-end mt-2">
+                            <div className="flex justify-between text-sm text-slate-600 mb-2">
+                                <span>Atendió:</span>
+                                <span className="font-semibold">{ticketSeleccionado.nombreSucursal}</span>
+                            </div>
+                            <div className="flex justify-between items-end mt-4">
                                 <span className="text-slate-500 font-medium">Total Cobrado:</span>
-                                <span className="text-3xl font-black text-blue-600">${ticketSeleccionado.total.toFixed(2)}</span>
+                                <span className="text-3xl font-black text-blue-600">${ticketSeleccionado.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                             <button onClick={() => setTicketSeleccionado(null)} className="w-full mt-6 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold transition-colors">
                                 Cerrar Detalles
