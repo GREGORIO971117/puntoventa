@@ -13,7 +13,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED 1
-# 👈 Compilamos Next.js
+
+run mkdir -p public
 RUN npm run build
 
 # ETAPA 3: Producción (Runner optimizado)
