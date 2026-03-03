@@ -5,7 +5,7 @@ import {
     Package, AlertTriangle, XCircle, CheckCircle2, Plus, Search,
     MoreVertical, Edit, Trash2, ArrowUpCircle, X,
     ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Upload, Download,
-    Barcode // 📷 NUEVO: Importamos un icono de código de barras
+    Barcode, DollarSign // 📷 NUEVO: Importamos DollarSign para el valor monetario
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { read, utils, writeFile } from 'xlsx';
@@ -36,7 +36,6 @@ export default function InventarioPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [idEditando, setIdEditando] = useState<string | null>(null);
 
-    // 📷 NUEVO: 1. Agregamos codigoBarras al estado inicial
     const [nuevoProducto, setNuevoProducto] = useState({
         nombre: '', categoria: 'Papelería', precio: '', stock: '', stockMinimo: '', sucursal: '', codigoBarras: ''
     });
@@ -110,7 +109,7 @@ export default function InventarioPage() {
 
             return {
                 'ID': item.id,
-                'Código de Barras': item.codigoBarras || '', // 📷 NUEVO: 2. Lo agregamos al Excel
+                'Código de Barras': item.codigoBarras || '',
                 'Nombre del Producto': item.nombre,
                 'Categoría': item.categoria,
                 'Sucursal': item.sucursal,
@@ -131,7 +130,6 @@ export default function InventarioPage() {
 
     let datosProcesados = inventario.filter((item) => {
         const coincideSucursal = sucursalFiltro === 'Todas' || item.sucursal === sucursalFiltro;
-        // 📷 NUEVO: 3. Ahora la barra de búsqueda también busca por código de barras
         const coincideBusqueda = item.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
             (item.codigoBarras && item.codigoBarras.includes(busqueda));
 
@@ -151,6 +149,12 @@ export default function InventarioPage() {
             return 0;
         });
     }
+
+    // ==========================================
+    // 📊 NUEVO: CÁLCULO DE TOTALES DINÁMICOS
+    // ==========================================
+    const totalUnidades = datosProcesados.reduce((acc, item) => acc + Number(item.stock), 0);
+    const valorTotalInventario = datosProcesados.reduce((acc, item) => acc + (Number(item.stock) * Number(item.precio)), 0);
 
     const totalPaginas = Math.ceil(datosProcesados.length / filasPorPagina) || 1;
     const paginaSegura = Math.min(paginaActual, totalPaginas);
@@ -210,14 +214,12 @@ export default function InventarioPage() {
 
     const abrirCrear = () => {
         setIdEditando(null);
-        // 📷 NUEVO: 4. Reiniciamos el código de barras al crear uno nuevo
         setNuevoProducto({ nombre: '', categoria: 'Papelería', precio: '', stock: '', stockMinimo: '', sucursal: sucursales[0]?.nombre || '', codigoBarras: '' });
         setIsModalOpen(true);
     };
 
     const abrirEditar = (producto: any) => {
         setIdEditando(producto.id);
-        // 📷 NUEVO: 5. Cargamos el código de barras al editar
         setNuevoProducto({
             nombre: producto.nombre, categoria: producto.categoria,
             precio: producto.precio.toString(), stock: producto.stock.toString(),
@@ -280,6 +282,41 @@ export default function InventarioPage() {
                 </div>
             </div>
 
+            {/* ==========================================
+                📊 TARJETAS DE RESUMEN (TOTALES)
+            ========================================== */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                    <div className="p-3 bg-blue-100 text-blue-600 rounded-lg">
+                        <Package className="w-6 h-6" />
+                    </div>
+                    <div>
+                        <p className="text-sm text-slate-500 font-medium leading-tight">Productos Diferentes</p>
+                        <p className="text-2xl font-bold text-slate-800">{datosProcesados.length}</p>
+                    </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                    <div className="p-3 bg-indigo-100 text-indigo-600 rounded-lg">
+                        <Barcode className="w-6 h-6" />
+                    </div>
+                    <div>
+                        <p className="text-sm text-slate-500 font-medium leading-tight">Unidades Físicas (Stock)</p>
+                        <p className="text-2xl font-bold text-slate-800">{totalUnidades}</p>
+                    </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                    <div className="p-3 bg-emerald-100 text-emerald-600 rounded-lg">
+                        <DollarSign className="w-6 h-6" />
+                    </div>
+                    <div>
+                        <p className="text-sm text-slate-500 font-medium leading-tight">Valor Total del Inventario</p>
+                        <p className="text-2xl font-bold text-emerald-600">${valorTotalInventario.toFixed(2)}</p>
+                    </div>
+                </div>
+            </div>
+
             <div className="bg-white p-3 rounded-t-lg shadow-sm border border-slate-200 border-b-0 flex flex-col xl:flex-row gap-4 justify-between items-center">
                 <div className="relative w-full xl:w-96">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
@@ -313,7 +350,6 @@ export default function InventarioPage() {
                 <table className="w-full text-left border-collapse whitespace-nowrap">
                     <thead>
                         <tr className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200 select-none">
-                            {/* 📷 NUEVO: 6. Columna de Código en la tabla */}
                             <th className="py-3 px-4 font-semibold cursor-pointer hover:bg-slate-100" onClick={() => solicitarOrden('codigoBarras')}><Barcode className="w-4 h-4 inline mr-1" /> Código <IconoOrden columna="codigoBarras" /></th>
                             <th className="py-3 px-4 font-semibold cursor-pointer hover:bg-slate-100" onClick={() => solicitarOrden('nombre')}>Producto <IconoOrden columna="nombre" /></th>
                             <th className="py-3 px-4 font-semibold cursor-pointer hover:bg-slate-100" onClick={() => solicitarOrden('categoria')}>Categoría <IconoOrden columna="categoria" /></th>
@@ -330,7 +366,6 @@ export default function InventarioPage() {
                         ) : (
                             datosPaginados.map((item) => (
                                 <tr key={item.id} className="hover:bg-blue-50/30 transition-colors">
-                                    {/* 📷 NUEVO: 7. Mostramos el código en la fila */}
                                     <td className="py-2.5 px-4 font-mono text-xs text-slate-500">{item.codigoBarras || '-'}</td>
                                     <td className="py-2.5 px-4 font-medium text-slate-800">{item.nombre}</td>
                                     <td className="py-2.5 px-4 text-slate-600">{item.categoria}</td>
@@ -388,7 +423,6 @@ export default function InventarioPage() {
                         </div>
                         <form onSubmit={procesarFormulario} className="p-6 space-y-4">
 
-                            {/* 📷 NUEVO: 8. Input para el Código de Barras al inicio del formulario */}
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Código de Barras (Opcional)</label>
                                 <div className="relative">
