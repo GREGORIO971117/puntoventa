@@ -19,6 +19,9 @@ export default function VentasPage() {
     const [sucursalActiva, setSucursalActiva] = useState<string>('');
     const [mostrarCamara, setMostrarCamara] = useState(false);
 
+    // 📱 NUEVO: Estado para controlar qué se ve en el celular
+    const [verCarritoMovil, setVerCarritoMovil] = useState(false);
+
     const cargarDatos = async () => {
         setCargando(true);
         const [datosInventario, datosSucursales] = await Promise.all([
@@ -56,7 +59,10 @@ export default function VentasPage() {
     };
 
     const eliminarProducto = (idProducto: string | number) => setCarrito((prev) => prev.filter((item) => item.id !== idProducto));
-    const vaciarCarrito = () => setCarrito([]);
+    const vaciarCarrito = () => {
+        setCarrito([]);
+        setVerCarritoMovil(false); // Regresar al catálogo si se vacía
+    };
 
     const cobrarTicket = async () => {
         if (!sucursalActiva) return alert("Error: No hay sucursal seleccionada");
@@ -76,15 +82,15 @@ export default function VentasPage() {
     };
 
     const totalPagar = carrito.reduce((total, item) => total + item.precio * item.cantidad, 0);
+    const totalArticulos = carrito.reduce((total, item) => total + item.cantidad, 0);
     const productosDisponibles = inventario.filter(item => item.sucursal === sucursalActiva && item.stock > 0);
 
     const manejarCodigoEscaneado = (codigoLeido: string) => {
         const productoEncontrado = productosDisponibles.find(p => p.codigoBarras === codigoLeido);
-
         if (productoEncontrado) {
             agregarProducto(productoEncontrado);
         } else {
-            alert(`⚠️ El producto con código ${codigoLeido} no está registrado, no pertenece a esta sucursal, o ya no tiene stock.`);
+            alert(`⚠️ El producto con código ${codigoLeido} no está registrado o no tiene stock.`);
         }
     };
 
@@ -92,7 +98,7 @@ export default function VentasPage() {
         return (
             <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] bg-slate-50">
                 <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-                <div className="text-slate-500 font-bold text-lg">Abriendo caja y cargando catálogo...</div>
+                <div className="text-slate-500 font-bold text-lg">Abriendo caja...</div>
             </div>
         );
     }
@@ -103,78 +109,73 @@ export default function VentasPage() {
         <main className="flex flex-col lg:flex-row h-[calc(100dvh-64px)] bg-slate-50 font-sans overflow-hidden">
 
             {/* =========================================================
-                LADO IZQUIERDO: CONTROLES Y CATÁLOGO
+                VISTA 1: CATÁLOGO DE PRODUCTOS (Se oculta en móvil si ves el carrito)
             ========================================================= */}
-            <div className="flex-1 flex flex-col overflow-hidden relative">
+            <div className={`flex-1 flex flex-col overflow-hidden relative ${verCarritoMovil ? 'hidden lg:flex' : 'flex'}`}>
 
-                {/* Header Fijo */}
-                <div className="p-4 bg-white shadow-sm z-10">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-                        <h1 className="text-xl font-extrabold text-slate-800 tracking-tight">
-                            Terminal de Caja
-                        </h1>
-                        <div className="flex items-center w-full sm:w-auto bg-slate-100 rounded-lg p-1">
-                            <span className="text-sm text-slate-500 font-semibold pl-3 pr-2">📍</span>
-                            <select
-                                value={sucursalActiva}
-                                disabled={!esAdmin}
-                                onChange={(e) => { setSucursalActiva(e.target.value); vaciarCarrito(); }}
-                                className={`w-full bg-transparent border-none focus:ring-0 py-1.5 text-sm font-bold outline-none ${!esAdmin ? 'text-slate-500 cursor-not-allowed opacity-80' : 'text-blue-700 cursor-pointer'}`}
-                            >
-                                {sucursales.map(sucursal => (
-                                    <option key={sucursal.id} value={sucursal.nombre}>
-                                        {sucursal.nombre}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                <div className="p-4 bg-white shadow-sm z-10 flex-shrink-0">
+                    <div className="flex justify-between items-center mb-4">
+                        <h1 className="text-xl font-extrabold text-slate-800 tracking-tight">Terminal</h1>
+                        <select
+                            value={sucursalActiva}
+                            disabled={!esAdmin}
+                            onChange={(e) => { setSucursalActiva(e.target.value); vaciarCarrito(); }}
+                            className={`bg-slate-100 border-none rounded-lg py-1 px-3 text-sm font-bold outline-none ${!esAdmin ? 'text-slate-500 opacity-80' : 'text-blue-700'}`}
+                        >
+                            {sucursales.map(s => <option key={s.id} value={s.nombre}>📍 {s.nombre}</option>)}
+                        </select>
                     </div>
 
-                    {/* Botón de Escáner */}
                     <button
                         onClick={() => setMostrarCamara(!mostrarCamara)}
-                        className={`w-full py-3 rounded-xl font-bold text-white text-center shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${mostrarCamara
-                                ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-200'
-                                : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'
-                            }`}
+                        className={`w-full py-3 rounded-xl font-bold text-white text-center transition-all ${mostrarCamara ? 'bg-rose-500' : 'bg-emerald-600'}`}
                     >
-                        {mostrarCamara ? (
-                            <><span>❌</span> Cerrar Escáner</>
-                        ) : (
-                            <><span>📷</span> Escanear Código de Barras</>
-                        )}
+                        {mostrarCamara ? "❌ Cerrar Escáner" : "📷 Escanear Código"}
                     </button>
 
-                    {/* Ventana de la Cámara */}
                     {mostrarCamara && (
-                        <div className="mt-4 p-2 bg-slate-50 border-2 border-emerald-400 rounded-2xl shadow-inner overflow-hidden">
+                        <div className="mt-4 p-2 bg-slate-50 border-2 border-emerald-400 rounded-xl overflow-hidden">
                             <BarcodeScanner onScanSuccess={manejarCodigoEscaneado} />
                         </div>
                     )}
                 </div>
 
-                {/* Catálogo con su propio scroll independiente */}
-                <div className="flex-1 overflow-y-auto p-4 pb-10">
+                <div className="flex-1 overflow-y-auto p-4 pb-24 lg:pb-4">
                     <CatalogoProductos productos={productosDisponibles} onAgregarProducto={agregarProducto} />
+                </div>
+
+                {/* 📱 BOTÓN FLOTANTE MÓVIL (Solo se ve en celulares) */}
+                <div className="lg:hidden absolute bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-slate-200">
+                    <button
+                        onClick={() => setVerCarritoMovil(true)}
+                        className="w-full bg-blue-600 active:bg-blue-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-blue-200 flex justify-between px-6 text-lg items-center"
+                    >
+                        <span className="flex items-center gap-2">🛒 Ver Carrito <span className="bg-white text-blue-600 text-sm px-2 py-0.5 rounded-full">{totalArticulos}</span></span>
+                        <span>${totalPagar.toFixed(2)}</span>
+                    </button>
                 </div>
             </div>
 
             {/* =========================================================
-                LADO DERECHO: TICKET DE VENTA (Carrito)
+                VISTA 2: CARRITO DE COMPRAS (Ocupa toda la pantalla en móvil)
             ========================================================= */}
-            {/* En móvil toma el 45% inferior de la pantalla y parece flotar. En PC es una barra lateral completa */}
-            <div className="w-full h-[45dvh] lg:h-full lg:w-[420px] bg-white lg:border-l border-slate-200 z-20 flex flex-col relative shadow-[0_-15px_30px_-15px_rgba(0,0,0,0.15)] lg:shadow-2xl rounded-t-3xl lg:rounded-none transition-all">
+            <div className={`w-full lg:w-[400px] h-full bg-white flex flex-col lg:border-l border-slate-200 z-20 shadow-2xl transition-all ${verCarritoMovil ? 'flex absolute inset-0 lg:relative' : 'hidden lg:flex'}`}>
 
-                {/* Overlay de Carga de Pago */}
+                {/* 📱 Botón de regreso móvil */}
+                <div className="lg:hidden p-4 border-b border-slate-200 bg-slate-50 flex items-center shadow-sm">
+                    <button onClick={() => setVerCarritoMovil(false)} className="text-blue-600 font-bold flex items-center gap-2 py-2 px-4 bg-blue-100 rounded-full active:bg-blue-200">
+                        ← Volver al Catálogo
+                    </button>
+                </div>
+
                 {procesandoPago && (
-                    <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center rounded-t-3xl lg:rounded-none">
-                        <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-4 shadow-lg"></div>
-                        <p className="font-extrabold text-blue-800 text-lg animate-pulse">Procesando pago...</p>
+                    <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+                        <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+                        <p className="font-bold text-blue-800">Procesando pago...</p>
                     </div>
                 )}
 
-                {/* Contenedor interno del Ticket (Debe poder scrollear por dentro) */}
-                <div className="flex-1 overflow-hidden p-2 lg:p-4">
+                <div className="flex-1 overflow-y-auto p-2 lg:p-4 pb-10">
                     <TicketVenta
                         carrito={carrito}
                         totalPagar={totalPagar}
