@@ -2,6 +2,13 @@
 
 import React, { createContext, useContext, useState } from 'react';
 import { ItemInventario, RegistroVenta, ItemCarrito, NombreSucursal, MetodoPago, UsuarioSucursal } from '@/types';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.tz.setDefault("America/Mexico_City");
 
 interface AppContextType {
     inventario: ItemInventario[];
@@ -34,10 +41,11 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     const [sucursales, setSucursales] = useState<UsuarioSucursal[]>(SUCURSALES_INICIALES);
 
     const registrarVenta = (sucursal: NombreSucursal, metodo: MetodoPago, carrito: ItemCarrito[]) => {
+        const ahora = dayjs().tz();
         const nuevoTicket: RegistroVenta = {
             id: `TKT-${(ventas.length + 1).toString().padStart(5, '0')}`,
-            fecha: new Date().toISOString().split('T')[0],
-            hora: new Date().toTimeString().split(' ')[0].substring(0, 5),
+            fecha: ahora.format('YYYY-MM-DD'),
+            hora: ahora.format('HH:mm'),
             sucursal, metodo, productos: carrito,
             totalArticulos: carrito.reduce((acc, item) => acc + item.cantidad, 0),
             total: carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0)

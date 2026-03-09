@@ -14,6 +14,13 @@ import {
     surtirProductoBD, eliminarProductoBD, editarProductoBD,
     importarInventarioMasivoBD, eliminarTodoInventarioBD
 } from '@/app/actions';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.tz.setDefault("America/Mexico_City");
 
 export default function InventarioPage() {
     const [inventario, setInventario] = useState<any[]>([]);
@@ -124,7 +131,7 @@ export default function InventarioPage() {
         const libro = utils.book_new();
         utils.book_append_sheet(libro, hoja, "Inventario Filtrado");
 
-        const nombreArchivo = `Inventario_${new Date().toISOString().split('T')[0]}.xlsx`;
+        const nombreArchivo = `Inventario_${dayjs().tz().format('YYYY-MM-DD')}.xlsx`;
         writeFile(libro, nombreArchivo);
     };
 

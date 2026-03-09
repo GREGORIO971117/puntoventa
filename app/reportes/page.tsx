@@ -8,6 +8,13 @@ import {
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 // 👈 1. Importamos las acciones reales del servidor
 import { obtenerReportesBD, obtenerSucursales } from '@/app/actions';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.tz.setDefault("America/Mexico_City");
 
 export default function ReportesPage() {
     // 👈 2. Estados locales para guardar los datos de la BD
@@ -31,11 +38,11 @@ export default function ReportesPage() {
 
         // Formateamos los datos de la BD para que las gráficas los entiendan
         const ventasFormateadas = datosVentas.map(venta => {
-            const fechaObj = new Date(venta.fecha);
+            const fechaObj = dayjs(venta.fecha).tz();
             return {
                 ...venta,
-                fechaFormateada: fechaObj.toISOString().split('T')[0], // ej. "2026-03-02"
-                horaFormateada: fechaObj.toTimeString().split(' ')[0], // ej. "14:30:00"
+                fechaFormateada: fechaObj.format('YYYY-MM-DD'), // ej. "2026-03-02"
+                horaFormateada: fechaObj.format('HH:mm:ss'), // ej. "14:30:00"
                 nombreSucursal: venta.sucursal.nombre // Extraemos el nombre de la relación
             };
         });
@@ -109,7 +116,7 @@ export default function ReportesPage() {
     const { ventasFiltradas, totalIngresos, totalArticulos, masVendidos, datosGrafica, esUnSoloDia } = analisisDatos;
 
     const aplicarFiltroRapido = (tipo: string) => {
-        const hoy = new Date().toISOString().split('T')[0];
+        const hoy = dayjs().tz().format('YYYY-MM-DD');
         if (tipo === 'hoy') { setFechaInicio(hoy); setFechaFin(hoy); }
         if (tipo === 'mes') {
             const yyyyMm = hoy.substring(0, 7);
@@ -145,7 +152,7 @@ export default function ReportesPage() {
 
                 <div className="flex flex-col md:flex-row items-end md:items-center gap-4 w-full xl:w-auto">
                     <div className="flex bg-slate-100 p-1 rounded-lg">
-                        <button onClick={() => aplicarFiltroRapido('hoy')} className={`px-3 py-1.5 text-sm font-semibold rounded-md ${fechaInicio === new Date().toISOString().split('T')[0] ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:bg-white hover:shadow-sm'}`}>Hoy</button>
+                        <button onClick={() => aplicarFiltroRapido('hoy')} className={`px-3 py-1.5 text-sm font-semibold rounded-md ${fechaInicio === dayjs().tz().format('YYYY-MM-DD') ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:bg-white hover:shadow-sm'}`}>Hoy</button>
                         <button onClick={() => aplicarFiltroRapido('mes')} className="px-3 py-1.5 text-sm font-semibold rounded-md text-slate-600 hover:bg-white shadow-sm">Este Mes</button>
                         <button onClick={() => aplicarFiltroRapido('todos')} className={`px-3 py-1.5 text-sm font-semibold rounded-md ${!fechaInicio ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:bg-white hover:shadow-sm'}`}>Histórico</button>
                     </div>
