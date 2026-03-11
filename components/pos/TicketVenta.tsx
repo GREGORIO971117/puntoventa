@@ -60,6 +60,8 @@ export function TicketVenta({ carrito, totalPagar, onAgregar, onRestar, onElimin
                 )}
             </div>
 
+
+
             <div className="pt-4 mt-2 border-t border-slate-200 bg-white">
                 <div className="flex justify-between items-end mb-4">
                     <span className="text-slate-500 font-medium">Total a cobrar:</span>
