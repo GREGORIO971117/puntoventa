@@ -1,9 +1,12 @@
+export const dynamic = 'force-dynamic';
+
 'use client';
 
 import { useState, useEffect } from 'react';
 import { CatalogoProductos } from '@/components/pos/CatalogoProductos';
 import { TicketVenta } from '@/components/pos/TicketVenta';
-import { ProductoBase, ItemCarrito } from '@/types';
+// 👇 Importamos ItemInventario (el que sí tiene stock) en lugar de ProductoBase
+import { ItemInventario, ItemCarrito } from '@/types';
 import { obtenerInventario, obtenerSucursales, registrarVentaBD } from '@/app/actions';
 import { useSession } from 'next-auth/react';
 import BarcodeScanner from '@/components/pos/BarcodeScanner';
@@ -46,10 +49,24 @@ export default function VentasPage() {
         cargarDatos();
     }, [session]);
 
-    const agregarProducto = (producto: ProductoBase) => {
+    // 👇 Cambiamos 'any' por 'ItemInventario'
+    const agregarProducto = (producto: ItemInventario) => {
         setCarrito((prev) => {
             const existe = prev.find((item) => item.id === producto.id);
-            if (existe) return prev.map((item) => item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item);
+
+            if (existe) {
+                if (existe.cantidad >= producto.stock) {
+                    alert(`⚠️ ¡Stock insuficiente! Solo tienes ${producto.stock} unidades de "${producto.nombre}".`);
+                    return prev; 
+                }
+                return prev.map((item) => item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item);
+            }
+
+            if (producto.stock < 1) {
+                alert(`⚠️ ¡Agotado! No hay existencias de "${producto.nombre}".`);
+                return prev;
+            }
+
             return [...prev, { ...producto, cantidad: 1 }];
         });
     };
@@ -59,9 +76,10 @@ export default function VentasPage() {
     };
 
     const eliminarProducto = (idProducto: string | number) => setCarrito((prev) => prev.filter((item) => item.id !== idProducto));
+    
     const vaciarCarrito = () => {
         setCarrito([]);
-        setVerCarritoMovil(false); // Regresar al catálogo si se vacía
+        setVerCarritoMovil(false); 
     };
 
     const cobrarTicket = async () => {
@@ -156,12 +174,9 @@ export default function VentasPage() {
                 </div>
             </div>
 
-            {/* =========================================================
-                VISTA 2: CARRITO DE COMPRAS (Ocupa toda la pantalla en móvil)
-            ========================================================= */}
+            
             <div className={`w-full lg:w-[400px] h-full bg-white flex flex-col lg:border-l border-slate-200 z-20 shadow-2xl transition-all ${verCarritoMovil ? 'flex absolute inset-0 lg:relative' : 'hidden lg:flex'}`}>
 
-                {/* 📱 Botón de regreso móvil */}
                 <div className="lg:hidden p-4 border-b border-slate-200 bg-slate-50 flex items-center shadow-sm">
                     <button onClick={() => setVerCarritoMovil(false)} className="text-blue-600 font-bold flex items-center gap-2 py-2 px-4 bg-blue-100 rounded-full active:bg-blue-200">
                         ← Volver al Catálogo

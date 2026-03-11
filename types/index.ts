@@ -3,17 +3,15 @@
 export type MetodoPago = 'Efectivo' | 'Tarjeta' | 'Transferencia';
 export type CategoriaProducto = 'Papelería' | 'Escolar' | 'Oficina' | 'Escritura';
 
-// 1. Flexibilizamos la sucursal para que acepte cualquier texto nuevo
 export type NombreSucursal = string;
 
-// 2. NUEVA ENTIDAD: La Sucursal / Usuario
 export interface UsuarioSucursal {
     id: string;
-    nombre: string;       // Ej: "Centro", "Plaza Dorada"
-    encargado: string;    // Ej: "Juan Pérez"
+    nombre: string;       
+    encargado: string;    
     direccion: string;
-    username: string;     // Ej: "caja_centro"
-    password: string;     // En un futuro esto irá encriptado
+    username: string;     
+    password: string;     
 }
 
 export interface ProductoBase {
@@ -29,7 +27,7 @@ export interface ItemInventario extends ProductoBase {
     sucursal: NombreSucursal;
 }
 
-export interface ItemCarrito extends ProductoBase {
+export interface ItemCarrito extends ItemInventario {
     cantidad: number;
 }
 

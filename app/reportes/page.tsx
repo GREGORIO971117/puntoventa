@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -6,7 +7,6 @@ import {
     Calendar, Clock, Receipt, Eye, X
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-// 👈 1. Importamos las acciones reales del servidor
 import { obtenerReportesBD, obtenerSucursales } from '@/app/actions';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
@@ -17,7 +17,6 @@ dayjs.extend(timezone);
 dayjs.tz.setDefault("America/Mexico_City");
 
 export default function ReportesPage() {
-    // 👈 2. Estados locales para guardar los datos de la BD
     const [ventas, setVentas] = useState<any[]>([]);
     const [sucursales, setSucursales] = useState<any[]>([]);
     const [cargando, setCargando] = useState(true);
@@ -28,7 +27,6 @@ export default function ReportesPage() {
     const [ticketSeleccionado, setTicketSeleccionado] = useState<any | null>(null);
     const [montado, setMontado] = useState(false);
 
-    // 👈 3. Efecto para cargar los datos reales al montar la página
     const cargarDatos = async () => {
         setCargando(true);
         const [datosVentas, datosSucursales] = await Promise.all([
@@ -36,7 +34,6 @@ export default function ReportesPage() {
             obtenerSucursales()
         ]);
 
-        // Formateamos los datos de la BD para que las gráficas los entiendan
         const ventasFormateadas = datosVentas.map(venta => {
             const fechaObj = dayjs(venta.fecha).tz();
             return {

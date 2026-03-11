@@ -1,9 +1,9 @@
+export const dynamic = 'force-dynamic';
 'use client';
 
 import { useState, useEffect } from 'react';
 import { Store, Plus, MapPin, UserCircle, KeyRound, ShieldCheck, X, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-// 👈 1. Importamos las acciones del servidor en lugar del Contexto
 import { obtenerSucursales, crearSucursalBD, editarSucursalBD } from '@/app/actions';
 
 export default function SucursalesPage() {

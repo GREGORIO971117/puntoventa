@@ -18,7 +18,7 @@ interface AppContextType {
     surtirInventario: (idProducto: number, sucursal: NombreSucursal, cantidad: number) => void;
     agregarNuevoProducto: (producto: ItemInventario) => void;
     agregarSucursal: (sucursal: UsuarioSucursal) => void;
-    editarSucursal: (id: string, sucursalActualizada: UsuarioSucursal) => void; // 👈 NUEVA FUNCIÓN
+    editarSucursal: (id: string, sucursalActualizada: UsuarioSucursal) => void; 
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);

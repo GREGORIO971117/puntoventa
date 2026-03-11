@@ -1,16 +1,16 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Trash2, Plus, Minus, ShoppingCart } from "lucide-react";
-import { ItemCarrito, ProductoBase } from '@/types';
+import { ItemCarrito, ItemInventario } from '@/types';
 
 interface TicketProps {
     carrito: ItemCarrito[];
     totalPagar: number;
-    onAgregar: (item: ProductoBase) => void;
-    onRestar: (id: number) => void;
-    onEliminar: (id: number) => void;
+    onAgregar: (item: ItemInventario) => void;
+    onRestar: (id: number | string) => void; 
+    onEliminar: (id: number | string) => void;
     onVaciarCarrito: () => void;
-    onCobrar: () => void; // 👈 1. Agregamos esta propiedad
+    onCobrar: () => void;
 }
 
 export function TicketVenta({ carrito, totalPagar, onAgregar, onRestar, onEliminar, onVaciarCarrito, onCobrar }: TicketProps) {
@@ -66,7 +66,6 @@ export function TicketVenta({ carrito, totalPagar, onAgregar, onRestar, onElimin
                     <span className="text-4xl font-black text-blue-600">${totalPagar.toFixed(2)}</span>
                 </div>
 
-                {/* 2. Le pasamos el onClick al botón */}
                 <Button onClick={onCobrar} className="w-full h-14 text-lg font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200" disabled={carrito.length === 0}>
                     💳 Procesar Pago
                 </Button>

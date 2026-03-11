@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { unstable_noStore as noStore } from 'next/cache';
 
 // ==========================================
 // ACCIONES PARA SUCURSALES
@@ -9,6 +10,7 @@ import { revalidatePath } from 'next/cache';
 
 export async function obtenerSucursales() {
     // Traemos todas las sucursales ordenadas por fecha de creación
+    noStore();
     return await prisma.sucursal.findMany({
         orderBy: { createdAt: 'asc' }
     });
@@ -59,6 +61,7 @@ export async function editarSucursalBD(id: string, data: any) {
 // ==========================================
 
 export async function obtenerInventario() {
+    noStore();
     // Traemos todos los productos ordenados por nombre
     return await prisma.producto.findMany({
         orderBy: { nombre: 'asc' }
@@ -262,6 +265,7 @@ export async function registrarVentaBD(sucursalActiva: string, metodoPago: strin
 }
 
 export async function obtenerReportesBD() {
+    noStore();
     // Traemos todas las ventas ordenadas de la más reciente a la más antigua
     // Usamos 'include' para que Prisma traiga también el nombre de la sucursal
     return await prisma.venta.findMany({
