@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server';
 import { logout } from '@/app/actions';
 import Link from 'next/link';
 import { ModalProducto } from '@/components/ModalProducto';
+import { BotonEditarProducto } from '@/components/BotonEditarProducto';
+
 
 export default async function InventarioPage() {
   const supabase = await createClient();
@@ -60,10 +62,11 @@ export default async function InventarioPage() {
           />
         </div>
 
-        {/* Tabla de Datos Formal */}
+     {/* Tabla de Datos Formal */}
         <div className="bg-white border border-slate-200 rounded-md overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm text-slate-600">
+              
               <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
                 <tr>
                   <th className="px-6 py-4">Código</th>
@@ -72,11 +75,12 @@ export default async function InventarioPage() {
                   <th className="px-6 py-4">Tipo</th>
                   <th className="px-6 py-4 text-right">Precio Venta</th>
                   <th className="px-6 py-4 text-right">Stock</th>
+                  {/* 👈 Arreglamos el encabezado: Solo dice "Acciones" */}
                   <th className="px-6 py-4 text-center">Acciones</th>
                 </tr>
               </thead>
+              
               <tbody className="divide-y divide-slate-200">
-                {/* Mostramos un mensaje si no hay productos */}
                 {!productos || productos.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
@@ -84,7 +88,6 @@ export default async function InventarioPage() {
                     </td>
                   </tr>
                 ) : (
-                  // Si hay productos, los dibujamos
                   productos.map((prod) => (
                     <tr key={prod.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4 font-mono text-slate-500">
@@ -105,9 +108,16 @@ export default async function InventarioPage() {
                           {prod.stock_actual}
                         </span>
                       </td>
+                      
+                      {/* 👈 AQUÍ SÍ VA EL BOTÓN (Dentro del map, donde prod sí existe) */}
                       <td className="px-6 py-4 text-center">
-                        <button className="text-blue-600 hover:text-blue-800 font-medium text-sm">Editar</button>
+                        <BotonEditarProducto 
+                          producto={prod} 
+                          sucursales={sucursales || []} 
+                          categorias={categorias || []} 
+                        />
                       </td>
+                      
                     </tr>
                   ))
                 )}
