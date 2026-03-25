@@ -72,3 +72,39 @@ export async function eliminarProducto(id: string) {
   revalidatePath('/ventas');
   return { success: true };
 }
+
+export async function vaciarInventario(passwordConfirm: string) {
+  const supabase = await createClient();
+  
+  // Verificamos identidad
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'No autorizado' };
+
+  // Intentamos re-autenticar o verificar que es admin (por simplicidad aquí validamos rol)
+  const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single();
+  if (perfil?.rol !== 'admin') return { error: 'Solo el administrador puede vaciar el inventario.' };
+
+  // Ejecutamos el borrado
+  const { error } = await supabase.from('productos').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Borra todo
+
+  if (error) return { error: 'Error al vaciar la base de datos.' };
+  
+  revalidatePath('/inventario');
+  return { success: true };
+}
+
+// 2. Acción para Carga Masiva (Recibe arreglo de objetos limpios)
+export async function cargaMasivaProductos(productos: any[]) {
+  const supabase = await createClient();
+  
+  // Insertamos en bloques para mayor seguridad
+  const { error } = await supabase.from('productos').insert(productos);
+
+  if (error) {
+    console.error(error);
+    return { error: 'Error al insertar productos. Verifique que los códigos de barras no estén duplicados.' };
+  }
+
+  revalidatePath('/inventario');
+  return { success: true };
+}

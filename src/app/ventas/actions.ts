@@ -12,19 +12,16 @@ export async function procesarVenta(datosVenta: {
   const supabase = await createClient();
   const { sucursalId, cajeroId, total, carrito } = datosVenta;
 
-  // EL TRUCO: Si el usuario no tiene sucursal (ej. el Admin global), 
-  // usamos la sucursal a la que pertenece el primer producto del carrito.
   const sucursalFinal = sucursalId || carrito[0]?.sucursal_id;
 
   if (!sucursalFinal) {
     return { error: 'Error: No se pudo determinar a qué sucursal pertenece esta venta.' };
   }
 
-  // 1. Guardar el Ticket Principal
   const { data: venta, error: errorVenta } = await supabase
     .from('ventas')
     .insert({
-      sucursal_id: sucursalFinal, // 👈 Aquí usamos nuestra variable inteligente
+      sucursal_id: sucursalFinal, 
       cajero_id: cajeroId,
       total: total,
       metodo_pago: 'Efectivo',
@@ -37,7 +34,6 @@ export async function procesarVenta(datosVenta: {
     return { error: 'No se pudo generar el ticket en la base de datos.' };
   }
 
-  // 2. Guardar las partidas (detalles) del ticket
   const detalles = carrito.map((item) => ({
     venta_id: venta.id,
     producto_id: item.id,

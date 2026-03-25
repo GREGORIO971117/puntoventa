@@ -1,20 +1,27 @@
 import { createClient } from '@/lib/supabase/server';
 import { logout } from '@/app/actions';
 import Link from 'next/link';
+import { Navbar } from '@/components/Navbar'; // 👈 IMPORTAMOS EL NAVBAR
 import { redirect } from 'next/navigation';
 import { ModalDetalleVenta } from '@/components/ModalDetalleVenta';
 import { GraficaVentas } from '@/components/GraficaVentas';
 
 export default async function HistorialPage() {
+  
   const supabase = await createClient();
   
   // Seguridad
   const { data: { user } } = await supabase.auth.getUser();
-  const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user?.id).single();
-  
+  const { data: perfil } = await supabase
+    .from('perfiles')
+    .select('username, rol, sucursal_id, sucursales(nombre)')
+    .eq('id', user?.id)
+    .single();  
   if (perfil?.rol !== 'admin') {
     redirect('/ventas');
   }
+    const sucursalNombre = (perfil?.sucursales as any)?.nombre || 'Administración Central';
+
 
   // 🚀 LA SÚPER CONSULTA: Traemos ventas + sucursal + cajero + detalles + productos
   const { data: ventas } = await supabase
@@ -31,29 +38,11 @@ export default async function HistorialPage() {
     .order('created_at', { ascending: false }); // Las más nuevas primero
 
   return (
-    <div className="min-h-screen bg-slate-100 font-sans">
+    <div className="min-h-screen bg-slate-100 font-sans flex flex-col">
       
-      {/* HEADER CORPORATIVO */}
-      <header className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shadow-sm">
-        <div className="flex items-center gap-8">
-          <div>
-            <h1 className="text-xl font-bold tracking-wide">PAPELERÍA GALINDOS</h1>
-            <p className="text-xs text-slate-400 mt-0.5 uppercase tracking-wider">Historial y Reportes</p>
-          </div>
-          
-          <nav className="hidden md:flex gap-1 bg-slate-800 p-1 rounded-md">
-            <Link href="/ventas" className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors">Terminal POS</Link>
-            <Link href="/inventario" className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors">Inventario</Link>
-            <Link href="/sucursales" className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors">Sucursales</Link>
-            <Link href="/usuarios" className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors">Usuarios</Link>
-            <Link href="/historial" className="px-4 py-1.5 text-sm font-medium bg-blue-600 text-white rounded transition-colors">Historial</Link>
-          </nav>
-        </div>
+      {/* 👈 AQUÍ INYECTAMOS EL NAVBAR UNIVERSAL */}
+      <Navbar perfil={perfil} sucursalNombre={sucursalNombre} logoutAction={logout} />
 
-        <form action={logout}>
-          <button type="submit" className="text-sm font-medium text-slate-300 hover:text-white border border-slate-600 hover:border-slate-400 bg-slate-800 px-4 py-2 rounded-md transition-colors">Cerrar Sesión</button>
-        </form>
-      </header>
 
       <main className="max-w-7xl mx-auto p-6 mt-4 space-y-6">
         
