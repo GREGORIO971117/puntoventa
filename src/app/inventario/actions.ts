@@ -75,19 +75,23 @@ export async function eliminarProducto(id: string) {
 
 export async function vaciarInventario(passwordConfirm: string) {
   const supabase = await createClient();
-  
-  // Verificamos identidad
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'No autorizado' };
 
-  // Intentamos re-autenticar o verificar que es admin (por simplicidad aquí validamos rol)
   const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single();
   if (perfil?.rol !== 'admin') return { error: 'Solo el administrador puede vaciar el inventario.' };
 
-  // Ejecutamos el borrado
-  const { error } = await supabase.from('productos').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Borra todo
+  const { error } = await supabase
+    .from('productos')
+    .delete()
+    .not('id', 'is', null);
 
-  if (error) return { error: 'Error al vaciar la base de datos.' };
+  if (error) {
+    if (error.code === '23503') {
+      return { error: '❌ ERROR DE BASE DE DATOS: Aún hay ventas amarradas a estos productos. Debes correr el script SQL en Supabase (ON DELETE SET NULL) primero.' };
+    }
+    return { error: `Error interno de base de datos: ${error.message}` };
+  }
   
   revalidatePath('/inventario');
   return { success: true };

@@ -20,13 +20,13 @@ export function Navbar({ perfil, sucursalNombre, logoutAction }: { perfil: any, 
 
         {/* MENÚ DE ESCRITORIO (Oculto en celular) */}
         <nav className="hidden md:flex items-center gap-2 bg-slate-800 p-1.5 rounded-md">
-          <Link href="/ventas" className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors">POS</Link>
+          <Link href="/ventas" className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors">Punto de venta</Link>
           {perfil?.rol === 'admin' && (
             <>
               <Link href="/inventario" className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors">Inventario</Link>
               <Link href="/sucursales" className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors">Sucursales</Link>
               <Link href="/usuarios" className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors">Usuarios</Link>
-              <Link href="/historial" className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors">Historial</Link>
+              <Link href="/historial" className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors">Reporte de ventas</Link>
             </>
           )}
         </nav>
@@ -58,13 +58,13 @@ export function Navbar({ perfil, sucursalNombre, logoutAction }: { perfil: any, 
       {/* MENÚ DESPLEGABLE MÓVIL */}
       {menuAbierto && (
         <div className="md:hidden absolute top-full left-0 w-full bg-slate-800 border-t border-slate-700 shadow-xl py-2 px-4 flex flex-col gap-2">
-          <Link onClick={() => setMenuAbierto(false)} href="/ventas" className="px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 rounded">Terminal POS</Link>
+          <Link onClick={() => setMenuAbierto(false)} href="/ventas" className="px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 rounded">Punto de venta</Link>
           {perfil?.rol === 'admin' && (
             <>
               <Link onClick={() => setMenuAbierto(false)} href="/inventario" className="px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 rounded">Inventario</Link>
               <Link onClick={() => setMenuAbierto(false)} href="/sucursales" className="px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 rounded">Sucursales</Link>
               <Link onClick={() => setMenuAbierto(false)} href="/usuarios" className="px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 rounded">Usuarios</Link>
-              <Link onClick={() => setMenuAbierto(false)} href="/historial" className="px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 rounded">Historial y Reportes</Link>
+              <Link onClick={() => setMenuAbierto(false)} href="/historial" className="px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 rounded">Reporte de ventas</Link>
             </>
           )}
           <form action={logoutAction} className="mt-2 border-t border-slate-700 pt-2">
