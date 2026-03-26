@@ -12,9 +12,8 @@ export function Navbar({ perfil, sucursalNombre, logoutAction }: { perfil: any, 
         
         {/* LOGO Y SUCURSAL */}
         <div>
-          <h1 className="text-lg lg:text-xl font-bold tracking-wide">PAPELERÍA GALINDOS</h1>
-          <p className="text-[10px] lg:text-xs text-slate-400 mt-0.5 uppercase tracking-wider">
-            {sucursalNombre} • <span className="text-blue-400">{perfil?.username}</span>
+          <p className="text-lg lg:text-xl font-bold tracking-wide">
+            {sucursalNombre}
           </p>
         </div>
 

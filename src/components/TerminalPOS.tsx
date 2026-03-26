@@ -89,7 +89,7 @@ export function TerminalPOS({ productosBase, cajeroId, sucursalId }: any) {
         <input
           type="text"
           autoFocus
-          placeholder="🔍 Escanea código o busca producto..."
+          placeholder="Busca producto..."
           className="w-full p-4 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 lg:text-lg bg-white shrink-0"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
