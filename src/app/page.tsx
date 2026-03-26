@@ -37,7 +37,7 @@ export default function LoginPage() {
           <div className="text-6xl mb-4 animate-bounce">🎨🖍️</div>
           {/* TEXTO CON GRADIENTE */}
           <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 drop-shadow-sm">
-            GALINDOS
+            HelloKitty
           </h1>
           <p className="text-md font-bold text-pink-500 mt-2 tracking-widest uppercase">
             ✨ Punto de Venta ✨
@@ -54,7 +54,7 @@ export default function LoginPage() {
           
           <div className="group">
             <label className="block text-sm font-extrabold text-purple-600 mb-2 uppercase tracking-wider group-focus-within:text-pink-500 transition-colors">
-              👤 Usuario Genial
+              👤 Usuario
             </label>
             <input
               type="text"
