@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Papelerias Galindo",
   description: "Un sistema de administracion de papelerias",
+  icons:{
+    icon:'/icono.png'
+  }
 };
 
 export default function RootLayout({
