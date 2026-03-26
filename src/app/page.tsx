@@ -62,7 +62,7 @@ export default function LoginPage() {
               required
               autoComplete="off"
               className="w-full p-4 rounded-full border-4 border-pink-200 text-slate-700 font-bold focus:outline-none focus:border-pink-500 focus:ring-4 focus:ring-pink-200/50 bg-white shadow-inner transition-all transform hover:scale-[1.02]"
-              placeholder="Ej. admin"
+              placeholder="Usuario"
             />
           </div>
 
