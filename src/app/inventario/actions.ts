@@ -106,8 +106,7 @@ export async function cargaMasivaProductos(productos: any[]) {
 
   if (error) {
     console.error(error);
-    return { error: 'Error al insertar productos. Verifique que los códigos de barras no estén duplicados.' };
-  }
+return { error: 'Error interno al insertar productos. Verifica que los datos del Excel sean correctos y no tengan celdas vacías obligatorias.' };  }
 
   revalidatePath('/inventario');
   return { success: true };
