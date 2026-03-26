@@ -65,16 +65,34 @@ export function HerramientasInventario({ sucursales, categorias, productos }: an
           return;
         }
 
-        // 👈 LÓGICA MEJORADA: Ya no buscamos la sucursal en el Excel, usamos la del Selector
         const productosProcesados = data.map((fila: any) => {
-          const cat = categorias.find((c: any) => c.nombre === fila.Categoria);
+          
+          const filaNorm: any = {};
+          Object.keys(fila).forEach(k => {
+            filaNorm[k.toLowerCase().trim().replace(/ /g, '')] = fila[k];
+          });
+
+          const nombreCat = filaNorm['categoria'] || filaNorm['categoría'] || filaNorm['departamento'] || '';
+          const cat = categorias.find((c: any) => c.nombre.toLowerCase() === String(nombreCat).toLowerCase());
+          
+          const rawCodigo = filaNorm['codigobarras'] || filaNorm['codigo'] || filaNorm['código'] || filaNorm['sku'] || '';
+          const codigoLeido = String(rawCodigo).trim();
+
+          const rawNombre = filaNorm['nombre'] || filaNorm['descripcion'] || filaNorm['descripción'] || filaNorm['producto'] || filaNorm['articulo'] || 'Sin Nombre';
+
+          const rawPrecio = filaNorm['precio'] || filaNorm['precioventa'] || filaNorm['costo'] || filaNorm['p.v.'] || 0;
+          const precioLimpio = Number(rawPrecio);
+
+          const rawStock = filaNorm['stock'] || filaNorm['cantidad'] || filaNorm['existencia'] || filaNorm['inventario'] || 0;
+          const stockLimpio = Number(rawStock);
+
           return {
-            codigo_barras: String(fila.codigoBarras || '').trim().substring(0, 50),
-            nombre: String(fila.Nombre || 'Sin Nombre').trim().substring(0, 100),
-            precio_venta: Number(fila.Precio) || 0,
-            stock_actual: Number(fila.Stock) || 0,
-            categoria_id: cat?.id || categorias[0]?.id, // Si no halla la categoría, pone la primera
-            sucursal_id: sucursalDestino, // 👈 Se asigna directamente a la sucursal elegida
+            codigo_barras: codigoLeido === '' ? null : codigoLeido.substring(0, 50),
+            nombre: String(rawNombre).trim().substring(0, 100),
+            precio_venta: isNaN(precioLimpio) ? 0 : precioLimpio,
+            stock_actual: isNaN(stockLimpio) ? 0 : stockLimpio,
+            categoria_id: cat?.id || categorias[0]?.id, // ⚠️ Recuerda tener al menos 1 categoría en el sistema
+            sucursal_id: sucursalDestino, 
             tipo_venta: 'Pieza'
           };
         });
