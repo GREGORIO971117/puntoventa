@@ -42,7 +42,6 @@ export default async function InventarioPage() {
           
           <div>
             <h2 className="text-xl lg:text-2xl font-semibold text-slate-800">Catálogo de Productos</h2>
-            <p className="text-sm text-slate-500 mt-1">Gestiona existencias, precios y realiza cargas masivas.</p>
           </div>
 
           {/* Caja Blanca con todos los controles alineados */}

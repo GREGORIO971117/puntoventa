@@ -10,6 +10,7 @@ export function TablaInventario({ productos, sucursales, categorias }: { product
   const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroStock, setFiltroStock] = useState('');
   const [filtroSucursal, setFiltroSucursal] = useState('');
+  
   // Estados para la paginación
   const [itemsPorPagina, setItemsPorPagina] = useState(10);
   const [paginaActual, setPaginaActual] = useState(1);
@@ -22,6 +23,7 @@ export function TablaInventario({ productos, sucursales, categorias }: { product
     const coincideTipo = filtroTipo === '' || prod.tipo_venta === filtroTipo;
     const coincideSucursal = filtroSucursal === '' || prod.sucursal_id === filtroSucursal;
     let coincideStock = true;
+    
     if (filtroStock === 'bajo') coincideStock = prod.stock_actual <= prod.stock_minimo;
     if (filtroStock === 'ok') coincideStock = prod.stock_actual > prod.stock_minimo;
     if (filtroStock === 'agotado') coincideStock = prod.stock_actual === 0;
@@ -35,7 +37,6 @@ export function TablaInventario({ productos, sucursales, categorias }: { product
   const indexPrimerItem = indexUltimoItem - itemsPorPagina;
   const itemsActuales = productosFiltrados.slice(indexPrimerItem, indexUltimoItem);
 
-  // Si cambiamos los filtros, regresamos a la página 1
   const handleFiltroChange = (setter: any, valor: any) => {
     setter(valor);
     setPaginaActual(1);
@@ -43,15 +44,15 @@ export function TablaInventario({ productos, sucursales, categorias }: { product
 
   return (
     <div className="space-y-4">
-      {/* PANEL DE FILTROS */}
-      <div className="bg-white p-4 border border-slate-200 rounded-md shadow-sm grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* 👈 PANEL DE FILTROS CORREGIDO (xl:grid-cols-6) */}
+      <div className="bg-white p-4 border border-slate-200 rounded-md shadow-sm grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
         
-        {/* Búsqueda de texto */}
-        <div className="lg:col-span-2">
+        {/* Búsqueda de texto (Ocupa 2 columnas) */}
+        <div className="xl:col-span-2">
           <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Buscar Producto</label>
           <input 
             type="text" 
-            placeholder="Nombre o Código de barras..." 
+            placeholder="Nombre o Código..." 
             className="w-full p-2 border border-slate-300 rounded text-sm focus:border-blue-500 focus:outline-none bg-slate-50"
             value={busqueda}
             onChange={(e) => handleFiltroChange(setBusqueda, e.target.value)}
@@ -98,6 +99,7 @@ export function TablaInventario({ productos, sucursales, categorias }: { product
           </select>
         </div>
 
+        {/* Filtro Sucursal */}
         <div>
           <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Sucursal</label>
           <select 
@@ -129,7 +131,7 @@ export function TablaInventario({ productos, sucursales, categorias }: { product
             </thead>
             <tbody className="divide-y divide-slate-200">
               {itemsActuales.length === 0 ? (
-                <tr><td colSpan={7} className="px-6 py-8 text-center text-slate-500">No se encontraron productos con estos filtros.</td></tr>
+                <tr><td colSpan={8} className="px-6 py-8 text-center text-slate-500">No se encontraron productos con estos filtros.</td></tr>
               ) : (
                 itemsActuales.map((prod) => (
                   <tr key={prod.id} className="hover:bg-slate-50 transition-colors">

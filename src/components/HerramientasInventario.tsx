@@ -115,8 +115,8 @@ export function HerramientasInventario({ sucursales, categorias, productos }: an
     if (res?.error) alert(res.error);
     else alert("✅ Inventario vaciado correctamente.");
   };
-  return (
-    <div className="flex flex-wrap items-center gap-2">
+return (
+  <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-hide pb-1">
       
       {/* 👈 NUEVO: Selector de Sucursal Destino */}
       <select
